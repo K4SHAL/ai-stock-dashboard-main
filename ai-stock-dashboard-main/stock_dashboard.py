@@ -759,12 +759,7 @@ def main():
     st.markdown("---")
     st.markdown(
         """
-        <div style='text-align: center; color: #666; padding: 20px;'>
-            <p>🚀 <strong>AI Stock Dashboard</strong> - Professional technical analysis with machine learning</p>
-            <p><em>⚠️ This is for educational purposes only. Not financial advice.</em></p>
-            <p>Built with ❤️ by <a href='https://erikthiart.com' target='_blank'>Erik Thiart</a></p>
-            <p>📊 Powered by <a href='https://plotly.com' target='_blank'>Plotly</a> and <a href='https://streamlit.io' target='_blank'>Streamlit</a></p>
-        </div>
+       
         """, 
         unsafe_allow_html=True
     )
