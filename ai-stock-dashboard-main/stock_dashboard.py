@@ -53,20 +53,13 @@ class StockAnalyzer:
             return None, None, None, None, None
     
     def calculate_technical_indicators(self, data):
-        """Calculate technical indicators including EMA 20, 50, 200, RSI, ATR, and Volume metrics"""
+        """Calculate technical indicators including EMA 20, 50, 200, ATR, and Volume metrics"""
         df = data.copy()
         
         # Exponential Moving Averages
         df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
         df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
         df['EMA_200'] = df['Close'].ewm(span=200, adjust=False).mean()
-        
-        # RSI
-        delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        df['RSI'] = 100 - (100 / (1 + rs))
         
         # Volume indicators
         df['Volume_SMA'] = df['Volume'].rolling(window=20).mean()
@@ -126,7 +119,7 @@ class StockAnalyzer:
                        'Returns', 'Returns_5d', 'Returns_10d']
         feature_cols = [col for col in df.columns if not any(exc in col for exc in exclude_cols)]
         feature_cols = [col for col in feature_cols if 'lag' in col or 'mean' in col or 
-                       'std' in col or col in ['RSI', 'Price_vs_EMA20', 'Price_vs_EMA50', 
+                       'std' in col or col in ['Price_vs_EMA20', 'Price_vs_EMA50', 
                                               'Price_volatility_10d', 'Price_volatility_20d', 'ATR']]
         
         if len(feature_cols) < 5:
@@ -170,63 +163,6 @@ class StockAnalyzer:
         last_features_scaled = self.scaler.transform(model_info['last_features'])
         prediction = self.model.predict(last_features_scaled)[0]
         return prediction
-    
-    def generate_market_analysis(self, data, info, symbol):
-        """Generate AI-powered market analysis"""
-        latest = data.iloc[-1]
-        prev = data.iloc[-2]
-        
-        price_change = latest['Close'] - prev['Close']
-        price_change_pct = (price_change / prev['Close']) * 100
-        
-        rsi = latest.get('RSI', 50)
-        ema_20 = latest.get('EMA_20', latest['Close'])
-        ema_50 = latest.get('EMA_50', latest['Close'])
-        
-        avg_volume = data['Volume'].rolling(20).mean().iloc[-1]
-        volume_ratio = latest['Volume'] / avg_volume if avg_volume > 0 else 1
-        
-        analysis = []
-        
-        if price_change_pct > 3:
-            analysis.append(f"🚀 {symbol} shows exceptional bullish momentum with a {price_change_pct:.2f}% surge")
-        elif price_change_pct > 1:
-            analysis.append(f"🟢 {symbol} demonstrates strong upward movement (+{price_change_pct:.2f}%)")
-        elif price_change_pct > 0:
-            analysis.append(f"🟡 {symbol} shows modest gains (+{price_change_pct:.2f}%)")
-        elif price_change_pct > -1:
-            analysis.append(f"🟡 {symbol} experiences slight decline ({price_change_pct:.2f}%)")
-        elif price_change_pct > -3:
-            analysis.append(f"🔴 {symbol} shows moderate bearish pressure ({price_change_pct:.2f}%)")
-        else:
-            analysis.append(f"🔻 {symbol} faces significant selling pressure ({price_change_pct:.2f}%)")
-        
-        if rsi > 70:
-            analysis.append(f"⚠️ RSI at {rsi:.1f} shows overbought territory - exercise caution")
-        elif rsi < 30:
-            analysis.append(f"💡 RSI at {rsi:.1f} suggests oversold conditions - potential buying opportunity")
-        elif 40 <= rsi <= 60:
-            analysis.append(f"⚖️ RSI at {rsi:.1f} indicates balanced momentum")
-        else:
-            analysis.append(f"📊 RSI at {rsi:.1f} shows {('bullish' if rsi > 50 else 'bearish')} bias")
-        
-        if latest['Close'] > ema_20 > ema_50:
-            analysis.append("📈 Strong bullish alignment - price above both 20 and 50-day EMAs")
-        elif latest['Close'] < ema_20 < ema_50:
-            analysis.append("📉 Bearish trend confirmed - price below key exponential moving averages")
-        else:
-            analysis.append("➡️ Consolidation phase - awaiting directional breakout")
-        
-        if volume_ratio > 2:
-            analysis.append("🔥 Exceptional volume surge confirms strong conviction")
-        elif volume_ratio > 1.5:
-            analysis.append("📊 High volume validates price movement")
-        elif volume_ratio < 0.5:
-            analysis.append("📊 Below-average volume suggests weak conviction")
-        else:
-            analysis.append("📊 Normal volume levels")
-        
-        return analysis
 
 def create_performance_metrics(data, symbol):
     """Create performance metrics visualization"""
@@ -303,7 +239,6 @@ def main():
     
     show_prediction = st.sidebar.checkbox("🔮 ML Price Prediction", value=True)
     show_performance = st.sidebar.checkbox("📊 Performance Metrics", value=True)
-    show_analysis = st.sidebar.checkbox("🧠 AI Market Analysis", value=True)
     
     st.sidebar.markdown("---")
     
@@ -321,7 +256,7 @@ def main():
         st.info("💡 Try popular symbols like AAPL, MSFT, GOOGL, TSLA, etc.")
         return
     
-    with st.spinner("⚙️ Calculating technical metrics..."):
+    with st.spinner("⚙️ Calculating metrics..."):
         data = analyzer.calculate_technical_indicators(data)
     
     st.markdown("---")
@@ -364,18 +299,12 @@ def main():
             st.metric(label="🏢 Market Cap", value="N/A")
             
     with col4:
-        if 'RSI' in data.columns and not pd.isna(data['RSI'].iloc[-1]):
-            rsi = data['RSI'].iloc[-1]
-            st.metric(label="⚡ RSI (14)", value=f"{rsi:.1f}")
-        else:
-            st.metric(label="⚡ RSI (14)", value="N/A")
+        ema_20 = data['EMA_20'].iloc[-1] if 'EMA_20' in data.columns else 0
+        st.metric(label="📈 EMA 20", value=f"${ema_20:,.2f}")
 
     with col5:
-        if 'ATR' in data.columns and not pd.isna(data['ATR'].iloc[-1]):
-            atr = data['ATR'].iloc[-1]
-            st.metric(label="📉 ATR (14)", value=f"${atr:,.2f}")
-        else:
-            st.metric(label="📉 ATR (14)", value="N/A")
+        atr = data['ATR'].iloc[-1] if 'ATR' in data.columns else 0
+        st.metric(label="📉 ATR (14)", value=f"${atr:,.2f}")
     
     st.markdown("---")
     
@@ -417,7 +346,7 @@ def main():
                 
                 st.info(f"📈 **Training Accuracy:** {model_info['train_score']:.1%} | **Test Accuracy:** {model_info['test_score']:.1%}")
             else:
-                st.warning("⚠️ Insufficient data for reliable ML prediction. Need more historical data.")
+                st.warning("⚠️ Insufficient data for reliable ML prediction.")
         
         with col2:
             if model_info:
@@ -437,26 +366,10 @@ def main():
                 fig_importance.update_layout(height=400)
                 st.plotly_chart(fig_importance, use_container_width=True)
     
-    if show_analysis:
-        st.subheader("🧠 AI-Powered Market Analysis")
-        with st.spinner("🤖 Generating intelligent market insights..."):
-            analysis = analyzer.generate_market_analysis(data, info, symbol)
-        
-        for i, insight in enumerate(analysis):
-            if i == 0:
-                if "🚀" in insight or "🟢" in insight:
-                    st.success(insight)
-                elif "🔴" in insight or "🔻" in insight:
-                    st.error(insight)
-                else:
-                    st.warning(insight)
-            else:
-                st.info(insight)
-    
     st.markdown("---")
     
-    # 📋 Formatted Tabs including Major, Institutional & Top Mutual Fund Holders with comma formatting
-    tab1, tab2, tab3 = st.tabs(["📋 Company Info & Holders", "📊 Raw Data", "🔧 Technical Indicators"])
+    # 📋 Formatted Tabs including Institutional Breakdown, Top Mutual Fund Holders with comma formatting
+    tab1, tab2, tab3 = st.tabs(["📋 Company Info & Holders", "📊 Raw Data", "🔧 Technical Metrics"])
     
     with tab1:
         if info:
@@ -493,7 +406,7 @@ def main():
                         f"{inst_count:,}" if inst_count is not None and isinstance(inst_count, (int, float)) else "N/A"
                     ],
                     "Breakdown Metric": [
-                        "% of Shares Held by All Insider",
+                        "% of Shares Held by All Insiders",
                         "% of Shares Held by Institutions",
                         "% of Float Held by Institutions",
                         "Number of Institutions Holding Shares"
@@ -563,15 +476,23 @@ def main():
             st.warning("Company information not available")
     
     with tab2:
-        st.write("### 📊 Recent Price Data")
-        display_data = data[['Open', 'High', 'Low', 'Close', 'Volume']].tail(20).copy()
+        st.write("### 📊 Recent Price Data & Volume Bar Chart Comparison")
+        display_data = data[['Open', 'High', 'Low', 'Close', 'Volume', 'Volume_SMA']].tail(20).copy()
         display_data.index = display_data.index.strftime('%Y-%m-%d')
         
         for col in ['Open', 'High', 'Low', 'Close']:
             display_data[col] = display_data[col].apply(lambda x: f"{x:,.2f}")
         display_data['Volume'] = display_data['Volume'].apply(lambda x: f"{x:,.0f}")
+        display_data['Volume_SMA'] = display_data['Volume_SMA'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "N/A")
         
         st.dataframe(display_data, use_container_width=True)
+        
+        # Volume Bar Chart vs 20d Avg
+        fig_vol = go.Figure()
+        fig_vol.add_trace(go.Bar(x=data.tail(20).index.strftime('%Y-%m-%d'), y=data.tail(20)['Volume'], name='Volume', marker_color='#00ff88'))
+        fig_vol.add_trace(go.Scatter(x=data.tail(20).index.strftime('%Y-%m-%d'), y=data.tail(20)['Volume_SMA'], name='20d Avg Volume', line=dict(color='#ff9500', width=2)))
+        fig_vol.update_layout(title="Volume Bar Chart vs 20-Day Average", template='plotly_dark', height=400)
+        st.plotly_chart(fig_vol, use_container_width=True)
         
         csv = data[['Open', 'High', 'Low', 'Close', 'Volume']].tail(20).to_csv()
         st.download_button(
@@ -582,8 +503,8 @@ def main():
         )
     
     with tab3:
-        st.write("### 🔧 Technical Indicators (Last 10 Days)")
-        tech_columns = ['Close', 'EMA_20', 'EMA_50', 'EMA_200', 'RSI', 'ATR']
+        st.write("### 🔧 Technical Indicators (EMA 20, EMA 50, EMA 200, ATR)")
+        tech_columns = ['Close', 'EMA_20', 'EMA_50', 'EMA_200', 'ATR']
         available_columns = [col for col in tech_columns if col in data.columns]
         
         if available_columns:
