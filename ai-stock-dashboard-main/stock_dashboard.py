@@ -268,8 +268,13 @@ def main():
     col1, col2, col3, col4, col5 = st.columns(5)
     
     latest_price = data['Close'].iloc[-1]
-    # Safe handling of previous price to avoid NaN for 1d timeframe
-    prev_price = data['Close'].iloc[-2] if len(data) > 1 else latest_price
+    
+    # Robust check: handle timeframe lengths where data might only contain 1 row
+    if len(data) > 1:
+        prev_price = data['Close'].iloc[-2]
+    else:
+        prev_price = data['Open'].iloc[-1] if 'Open' in data.columns else latest_price
+        
     price_change = latest_price - prev_price
     price_change_pct = (price_change / prev_price) * 100 if prev_price > 0 else 0.0
     
@@ -277,7 +282,7 @@ def main():
         st.metric(
             label="💰 Current Price",
             value=f"${latest_price:,.2f}",
-            delta=f"{price_change:.2f} ({price_change_pct:+.2f}%)"
+            delta=f"{price_change:+.2f} ({price_change_pct:+.2f}%)"
         )
     
     with col2:
@@ -291,7 +296,7 @@ def main():
         )
     
     with col3:
-        market_cap = info.get('marketCap', 0)
+        market_cap = info.get('marketCap', 0) if info else 0
         if market_cap:
             if market_cap > 1e12:
                 cap_display = f"${market_cap/1e12:,.2f}T"
