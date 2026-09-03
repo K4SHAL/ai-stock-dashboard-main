@@ -167,7 +167,7 @@ class StockAnalyzer:
 def create_performance_metrics(data, symbol):
     """Create performance metrics visualization"""
     if len(data) < 2:
-        st.info("Insufficient data points for cumulative returns graph.")
+        st.info("Insufficient data points for cumulative returns graph under this timeframe.")
         return
         
     data['Daily_Returns'] = data['Close'].pct_change()
@@ -233,7 +233,6 @@ def main():
     else:
         symbol = popular_stocks[stock_choice]
     
-    # Updated analysis periods matching user preferences
     period = st.sidebar.selectbox(
         "📅 Analysis Period:",
         options=['1d', '1wk', '1mo', '3mo', '6mo', '1y', '2y', '5y'],
@@ -269,9 +268,10 @@ def main():
     col1, col2, col3, col4, col5 = st.columns(5)
     
     latest_price = data['Close'].iloc[-1]
+    # Safe handling of previous price to avoid NaN for 1d timeframe
     prev_price = data['Close'].iloc[-2] if len(data) > 1 else latest_price
     price_change = latest_price - prev_price
-    price_change_pct = (price_change / prev_price) * 100 if prev_price > 0 else 0
+    price_change_pct = (price_change / prev_price) * 100 if prev_price > 0 else 0.0
     
     with col1:
         st.metric(
@@ -373,7 +373,6 @@ def main():
     
     st.markdown("---")
     
-    # Tabs including Institutional Breakdown, Volume comparison across 1d, 1wk, 1mo, 3mo horizons
     tab1, tab2, tab3 = st.tabs(["📋 Company Info & Holders", "📊 Volume Comparison & Raw Data", "🔧 Technical Metrics"])
     
     with tab1:
@@ -483,7 +482,6 @@ def main():
     with tab2:
         st.write("### 📊 Multi-Horizon Volume Comparison (1 Day, 1 Week, 1 Month, 3 Months)")
         
-        # Fetch auxiliary periods safely for volume comparison bar chart
         vol_comparison_data = {}
         horizon_labels = {'1d': '1 Day', '1wk': '1 Week', '1mo': '1 Month', '3mo': '3 Months'}
         
