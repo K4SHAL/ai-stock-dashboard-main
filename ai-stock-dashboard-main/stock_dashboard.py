@@ -267,13 +267,15 @@ def main():
     
     col1, col2, col3, col4, col5 = st.columns(5)
     
-    latest_price = data['Close'].iloc[-1]
-    
-    # Robust check: handle timeframe lengths where data might only contain 1 row
-    if len(data) > 1:
+    # Robust price extraction with fallback to info if data Close is NaN
+    latest_price = data['Close'].iloc[-1] if not data.empty and not pd.isna(data['Close'].iloc[-1]) else 0.0
+    if latest_price == 0.0 and info:
+        latest_price = info.get('regularMarketPrice', info.get('currentPrice', 0.0))
+
+    if len(data) > 1 and not pd.isna(data['Close'].iloc[-2]):
         prev_price = data['Close'].iloc[-2]
     else:
-        prev_price = data['Open'].iloc[-1] if 'Open' in data.columns else latest_price
+        prev_price = data['Open'].iloc[-1] if not data.empty and 'Open' in data.columns and not pd.isna(data['Open'].iloc[-1]) else latest_price
         
     price_change = latest_price - prev_price
     price_change_pct = (price_change / prev_price) * 100 if prev_price > 0 else 0.0
@@ -281,18 +283,18 @@ def main():
     with col1:
         st.metric(
             label="💰 Current Price",
-            value=f"${latest_price:,.2f}",
-            delta=f"{price_change:+.2f} ({price_change_pct:+.2f}%)"
+            value=f"${latest_price:,.2f}" if latest_price > 0 else "N/A",
+            delta=f"{price_change:.2f} ({price_change_pct:+.2f}%)" if latest_price > 0 else "N/A"
         )
     
     with col2:
-        volume = data['Volume'].iloc[-1]
-        avg_volume = data['Volume'].rolling(20).mean().iloc[-1] if len(data) >= 20 else data['Volume'].mean()
-        volume_change = ((volume - avg_volume) / avg_volume) * 100 if avg_volume > 0 else 0
+        volume = data['Volume'].iloc[-1] if not data.empty and not pd.isna(data['Volume'].iloc[-1]) else 0
+        avg_volume = data['Volume'].rolling(20).mean().iloc[-1] if len(data) >= 20 else (data['Volume'].mean() if not data.empty else 0)
+        volume_change = ((volume - avg_volume) / avg_volume) * 100 if avg_volume > 0 and not pd.isna(avg_volume) else 0
         st.metric(
             label="📊 Volume",
-            value=f"{volume:,.0f}",
-            delta=f"{volume_change:+.1f}% vs avg"
+            value=f"{volume:,.0f}" if volume > 0 else "N/A",
+            delta=f"{volume_change:+.1f}% vs avg" if volume > 0 else "N/A"
         )
     
     with col3:
@@ -309,12 +311,12 @@ def main():
             st.metric(label="🏢 Market Cap", value="N/A")
             
     with col4:
-        ema_20 = data['EMA_20'].iloc[-1] if 'EMA_20' in data.columns else 0
-        st.metric(label="📈 EMA 20", value=f"${ema_20:,.2f}")
+        ema_20 = data['EMA_20'].iloc[-1] if 'EMA_20' in data.columns and not pd.isna(data['EMA_20'].iloc[-1]) else 0
+        st.metric(label="📈 EMA 20", value=f"${ema_20:,.2f}" if ema_20 > 0 else "N/A")
 
     with col5:
         atr = data['ATR'].iloc[-1] if 'ATR' in data.columns and not pd.isna(data['ATR'].iloc[-1]) else 0
-        st.metric(label="📉 ATR (14)", value=f"${atr:,.2f}")
+        st.metric(label="📉 ATR (14)", value=f"${atr:,.2f}" if atr > 0 else "N/A")
     
     st.markdown("---")
     
@@ -324,9 +326,9 @@ def main():
     
     if show_prediction:
         st.subheader("🔮 Machine Learning Price Prediction")
-        col1, col2 = st.columns([1, 1])
+        col_pred1, col_pred2 = st.columns([1, 1])
         
-        with col1:
+        with col_pred1:
             with st.spinner("🤖 Training AI prediction model..."):
                 model_info = analyzer.train_prediction_model(data)
             
@@ -337,15 +339,15 @@ def main():
                 
                 st.success("✅ Model trained successfully!")
                 
-                pred_col1, pred_col2 = st.columns(2)
-                with pred_col1:
+                sub_col1, sub_col2 = st.columns(2)
+                with sub_col1:
                     st.metric(
                         label="🎯 Next Day Prediction",
                         value=f"${prediction:,.2f}",
                         delta=f"{predicted_change:+.2f}%"
                     )
                 
-                with pred_col2:
+                with sub_col2:
                     confidence = model_info['test_score']
                     confidence_level = "High" if confidence > 0.8 else "Medium" if confidence > 0.6 else "Low"
                     st.metric(
@@ -358,7 +360,7 @@ def main():
             else:
                 st.warning("⚠️ Insufficient data points for reliable ML prediction under this timeframe.")
         
-        with col2:
+        with col_pred2:
             if model_info:
                 importance_df = pd.DataFrame(
                     list(model_info['feature_importance'].items()),
@@ -382,9 +384,9 @@ def main():
     
     with tab1:
         if info:
-            col1, col2 = st.columns(2)
+            c1, c2 = st.columns(2)
             
-            with col1:
+            with c1:
                 st.write("### 🏢 Company Details")
                 emp_count = info.get('fullTimeEmployees')
                 formatted_emp = f"{emp_count:,}" if emp_count and isinstance(emp_count, (int, float)) else 'N/A'
@@ -400,7 +402,7 @@ def main():
                 for key, value in company_info.items():
                     st.write(f"**{key}:** {value}")
             
-            with col2:
+            with c2:
                 st.write("### 🏛️ Major Holders Breakdown")
                 insider_pct = info.get('heldPercentInsiders')
                 inst_pct = info.get('heldPercentInstitutions')
@@ -521,8 +523,8 @@ def main():
         display_data.index = display_data.index.strftime('%Y-%m-%d')
         
         for col in ['Open', 'High', 'Low', 'Close']:
-            display_data[col] = display_data[col].apply(lambda x: f"{x:,.2f}")
-        display_data['Volume'] = display_data['Volume'].apply(lambda x: f"{x:,.0f}")
+            display_data[col] = display_data[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "N/A")
+        display_data['Volume'] = display_data['Volume'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "N/A")
         display_data['Volume_SMA'] = display_data['Volume_SMA'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "N/A")
         
         st.dataframe(display_data, use_container_width=True)
