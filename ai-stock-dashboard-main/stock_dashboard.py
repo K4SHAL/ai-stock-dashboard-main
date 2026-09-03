@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-from plotly.subplots import make_subplots
 import streamlit as st
 from datetime import datetime, timedelta
 from sklearn.ensemble import RandomForestRegressor
@@ -112,7 +111,7 @@ class StockAnalyzer:
         df = self.prepare_ml_features(data)
         df = df.dropna()
         
-        if len(df) < 100:
+        if len(df) < 5:
             return None
         
         exclude_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits', 
@@ -122,7 +121,7 @@ class StockAnalyzer:
                        'std' in col or col in ['Price_vs_EMA20', 'Price_vs_EMA50', 
                                               'Price_volatility_10d', 'Price_volatility_20d', 'ATR']]
         
-        if len(feature_cols) < 5:
+        if len(feature_cols) < 2:
             return None
         
         X = df[feature_cols].ffill().bfill()
@@ -135,10 +134,11 @@ class StockAnalyzer:
         X = X[mask]
         y = y[mask]
         
-        if len(X) < 50:
+        if len(X) < 3:
             return None
         
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        test_size_val = 0.2 if len(X) > 10 else 0.1
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size_val, random_state=42)
         
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
@@ -166,13 +166,17 @@ class StockAnalyzer:
 
 def create_performance_metrics(data, symbol):
     """Create performance metrics visualization"""
+    if len(data) < 2:
+        st.info("Insufficient data points for cumulative returns graph.")
+        return
+        
     data['Daily_Returns'] = data['Close'].pct_change()
     data['Cumulative_Returns'] = (1 + data['Daily_Returns']).cumprod() - 1
     
-    total_return = data['Cumulative_Returns'].iloc[-1] * 100
-    volatility = data['Daily_Returns'].std() * np.sqrt(252) * 100  
-    sharpe_ratio = (data['Daily_Returns'].mean() * 252) / (data['Daily_Returns'].std() * np.sqrt(252))
-    max_drawdown = ((data['Close'] / data['Close'].expanding().max()) - 1).min() * 100
+    total_return = data['Cumulative_Returns'].iloc[-1] * 100 if not pd.isna(data['Cumulative_Returns'].iloc[-1]) else 0
+    volatility = data['Daily_Returns'].std() * np.sqrt(252) * 100 if len(data) > 5 else 0
+    sharpe_ratio = (data['Daily_Returns'].mean() * 252) / (data['Daily_Returns'].std() * np.sqrt(252)) if len(data) > 5 and data['Daily_Returns'].std() > 0 else 0
+    max_drawdown = ((data['Close'] / data['Close'].expanding().max()) - 1).min() * 100 if len(data) > 1 else 0
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -229,10 +233,11 @@ def main():
     else:
         symbol = popular_stocks[stock_choice]
     
+    # Updated analysis periods matching user preferences
     period = st.sidebar.selectbox(
         "📅 Analysis Period:",
-        options=['1mo', '3mo', '6mo', '1y', '2y', '5y'],
-        index=3
+        options=['1d', '1wk', '1mo', '3mo', '6mo', '1y', '2y', '5y'],
+        index=2
     )
     
     st.sidebar.markdown("---")
@@ -264,9 +269,9 @@ def main():
     col1, col2, col3, col4, col5 = st.columns(5)
     
     latest_price = data['Close'].iloc[-1]
-    prev_price = data['Close'].iloc[-2]
+    prev_price = data['Close'].iloc[-2] if len(data) > 1 else latest_price
     price_change = latest_price - prev_price
-    price_change_pct = (price_change / prev_price) * 100
+    price_change_pct = (price_change / prev_price) * 100 if prev_price > 0 else 0
     
     with col1:
         st.metric(
@@ -277,12 +282,12 @@ def main():
     
     with col2:
         volume = data['Volume'].iloc[-1]
-        avg_volume = data['Volume'].rolling(20).mean().iloc[-1]
+        avg_volume = data['Volume'].rolling(20).mean().iloc[-1] if len(data) >= 20 else data['Volume'].mean()
         volume_change = ((volume - avg_volume) / avg_volume) * 100 if avg_volume > 0 else 0
         st.metric(
             label="📊 Volume",
             value=f"{volume:,.0f}",
-            delta=f"{volume_change:+.1f}% vs 20d avg"
+            delta=f"{volume_change:+.1f}% vs avg"
         )
     
     with col3:
@@ -303,7 +308,7 @@ def main():
         st.metric(label="📈 EMA 20", value=f"${ema_20:,.2f}")
 
     with col5:
-        atr = data['ATR'].iloc[-1] if 'ATR' in data.columns else 0
+        atr = data['ATR'].iloc[-1] if 'ATR' in data.columns and not pd.isna(data['ATR'].iloc[-1]) else 0
         st.metric(label="📉 ATR (14)", value=f"${atr:,.2f}")
     
     st.markdown("---")
@@ -346,7 +351,7 @@ def main():
                 
                 st.info(f"📈 **Training Accuracy:** {model_info['train_score']:.1%} | **Test Accuracy:** {model_info['test_score']:.1%}")
             else:
-                st.warning("⚠️ Insufficient data for reliable ML prediction.")
+                st.warning("⚠️ Insufficient data points for reliable ML prediction under this timeframe.")
         
         with col2:
             if model_info:
@@ -368,8 +373,8 @@ def main():
     
     st.markdown("---")
     
-    # 📋 Formatted Tabs including Institutional Breakdown, Top Mutual Fund Holders with comma formatting
-    tab1, tab2, tab3 = st.tabs(["📋 Company Info & Holders", "📊 Raw Data", "🔧 Technical Metrics"])
+    # Tabs including Institutional Breakdown, Volume comparison across 1d, 1wk, 1mo, 3mo horizons
+    tab1, tab2, tab3 = st.tabs(["📋 Company Info & Holders", "📊 Volume Comparison & Raw Data", "🔧 Technical Metrics"])
     
     with tab1:
         if info:
@@ -476,7 +481,39 @@ def main():
             st.warning("Company information not available")
     
     with tab2:
-        st.write("### 📊 Recent Price Data & Volume Bar Chart Comparison")
+        st.write("### 📊 Multi-Horizon Volume Comparison (1 Day, 1 Week, 1 Month, 3 Months)")
+        
+        # Fetch auxiliary periods safely for volume comparison bar chart
+        vol_comparison_data = {}
+        horizon_labels = {'1d': '1 Day', '1wk': '1 Week', '1mo': '1 Month', '3mo': '3 Months'}
+        
+        for h_key, h_label in horizon_labels.items():
+            try:
+                temp_hist = yf.Ticker(symbol).history(period=h_key)
+                if not temp_hist.empty:
+                    vol_comparison_data[h_label] = temp_hist['Volume'].mean()
+                else:
+                    vol_comparison_data[h_label] = 0
+            except:
+                vol_comparison_data[h_label] = 0
+                
+        vol_comp_df = pd.DataFrame(list(vol_comparison_data.items()), columns=['Time Horizon', 'Average Volume'])
+        
+        fig_multi_vol = px.bar(
+            vol_comp_df,
+            x='Time Horizon',
+            y='Average Volume',
+            text_auto=',.2s',
+            title=f"{symbol} - Average Volume Across Time Horizons",
+            template='plotly_dark',
+            color='Average Volume',
+            color_continuous_scale='Greens'
+        )
+        fig_multi_vol.update_layout(height=400)
+        st.plotly_chart(fig_multi_vol, use_container_width=True)
+        
+        st.markdown("---")
+        st.write("### 📊 Recent Price & Volume Table")
         display_data = data[['Open', 'High', 'Low', 'Close', 'Volume', 'Volume_SMA']].tail(20).copy()
         display_data.index = display_data.index.strftime('%Y-%m-%d')
         
@@ -486,13 +523,6 @@ def main():
         display_data['Volume_SMA'] = display_data['Volume_SMA'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "N/A")
         
         st.dataframe(display_data, use_container_width=True)
-        
-        # Volume Bar Chart vs 20d Avg
-        fig_vol = go.Figure()
-        fig_vol.add_trace(go.Bar(x=data.tail(20).index.strftime('%Y-%m-%d'), y=data.tail(20)['Volume'], name='Volume', marker_color='#00ff88'))
-        fig_vol.add_trace(go.Scatter(x=data.tail(20).index.strftime('%Y-%m-%d'), y=data.tail(20)['Volume_SMA'], name='20d Avg Volume', line=dict(color='#ff9500', width=2)))
-        fig_vol.update_layout(title="Volume Bar Chart vs 20-Day Average", template='plotly_dark', height=400)
-        st.plotly_chart(fig_vol, use_container_width=True)
         
         csv = data[['Open', 'High', 'Low', 'Close', 'Volume']].tail(20).to_csv()
         st.download_button(
