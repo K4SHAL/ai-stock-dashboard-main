@@ -1,847 +1,1849 @@
-import yfinance as yf
+import math
+from datetime import datetime, date, timedelta
+
 import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-import plotly.express as px
 import streamlit as st
-from datetime import datetime
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-import warnings
-warnings.filterwarnings('ignore')
+import yfinance as yf
 
 
-def _mapping_number(values, key):
-    """Return a finite numeric field from a mapping-like provider response."""
-    if values is None:
-        return None
-    try:
-        value = values.get(key)
-    except AttributeError:
-        try:
-            value = values[key]
-        except (KeyError, TypeError, IndexError):
-            return None
+# ============================================================
+# PAGE CONFIG
+# ============================================================
+
+st.set_page_config(
+    page_title="AI Stock Dashboard",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+
+# ============================================================
+# CUSTOM CSS
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+        :root {
+            --orange: #ff7a00;
+            --orange-dark: #e96500;
+            --orange-light: #fff4e8;
+            --text: #171717;
+            --muted: #6b7280;
+            --border: #e7e7e7;
+            --white: #ffffff;
+            --green: #159447;
+            --red: #d83a3a;
+        }
+
+        .stApp {
+            background: #ffffff;
+            color: var(--text);
+        }
+
+        section[data-testid="stSidebar"] {
+            background: #fafafa;
+            border-right: 1px solid #eeeeee;
+        }
+
+        section[data-testid="stSidebar"] h1,
+        section[data-testid="stSidebar"] h2,
+        section[data-testid="stSidebar"] h3 {
+            color: var(--text);
+        }
+
+        .main-title {
+            font-size: 2.4rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            margin-bottom: 0.15rem;
+            color: #111111;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stock-header {
+            background: linear-gradient(
+                135deg,
+                #fff8f1 0%,
+                #ffffff 65%
+            );
+            border: 1px solid #f0dfcf;
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 18px;
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.035);
+        }
+
+        .ticker {
+            font-size: 2rem;
+            font-weight: 850;
+            color: #111111;
+            letter-spacing: -0.03em;
+        }
+
+        .company-name {
+            color: #6b7280;
+            font-size: 0.95rem;
+            margin-top: 2px;
+        }
+
+        .price {
+            font-size: 2.5rem;
+            font-weight: 850;
+            letter-spacing: -0.04em;
+            margin-top: 10px;
+        }
+
+        .positive {
+            color: var(--green);
+            font-weight: 700;
+        }
+
+        .negative {
+            color: var(--red);
+            font-weight: 700;
+        }
+
+        .neutral {
+            color: var(--muted);
+            font-weight: 700;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin: 24px 0 12px 0;
+            color: #171717;
+        }
+
+        .metric-card {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 17px;
+            min-height: 105px;
+            transition:
+                transform 0.18s ease,
+                box-shadow 0.18s ease,
+                border-color 0.18s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-3px);
+            border-color: #ffc38d;
+            box-shadow: 0 10px 28px rgba(255, 122, 0, 0.09);
+        }
+
+        .metric-label {
+            color: #737373;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            color: #111111;
+            font-size: 1.25rem;
+            font-weight: 800;
+            word-break: break-word;
+        }
+
+        .info-card {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 14px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 9px 0;
+            border-bottom: 1px solid #f1f1f1;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #737373;
+            font-size: 0.88rem;
+        }
+
+        .info-value {
+            color: #171717;
+            font-weight: 700;
+            text-align: right;
+            word-break: break-word;
+        }
+
+        .source-box {
+            background: #fff8f1;
+            border: 1px solid #ffd7b0;
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-top: 20px;
+            color: #663500;
+            font-size: 0.86rem;
+        }
+
+        .favorite-card {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 15px;
+            margin-bottom: 8px;
+            transition:
+                transform 0.18s ease,
+                box-shadow 0.18s ease;
+        }
+
+        .favorite-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+        }
+
+        div.stButton > button {
+            border-radius: 11px;
+            border: 1px solid #dedede;
+            transition:
+                transform 0.15s ease,
+                box-shadow 0.15s ease,
+                background 0.15s ease;
+        }
+
+        div.stButton > button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 18px rgba(255, 122, 0, 0.14);
+            border-color: #ffb36d;
+        }
+
+        div.stButton > button[kind="primary"] {
+            background: var(--orange);
+            color: white;
+            border: none;
+        }
+
+        div.stButton > button[kind="primary"]:hover {
+            background: var(--orange-dark);
+        }
+
+        .small-muted {
+            color: #888888;
+            font-size: 0.78rem;
+        }
+
+        .error-box {
+            background: #fff1f1;
+            border: 1px solid #f3b5b5;
+            color: #8b1e1e;
+            padding: 14px;
+            border-radius: 12px;
+        }
+
+        .warning-box {
+            background: #fff9ed;
+            border: 1px solid #f3d79a;
+            color: #765000;
+            padding: 14px;
+            border-radius: 12px;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# SESSION STATE
+# ============================================================
+
+if "favorites" not in st.session_state:
+    st.session_state.favorites = []
+
+if "selected_symbol" not in st.session_state:
+    st.session_state.selected_symbol = "AAPL"
+
+if "last_loaded" not in st.session_state:
+    st.session_state.last_loaded = None
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+def clean_number(value):
+    """Return None for invalid numeric values."""
     if value is None:
         return None
+
     try:
-        number = float(value)
-    except (TypeError, ValueError, OverflowError):
+        if pd.isna(value):
+            return None
+
+        value = float(value)
+
+        if not math.isfinite(value):
+            return None
+
+        return value
+
+    except (TypeError, ValueError):
         return None
-    return number if np.isfinite(number) else None
 
 
-def _format_price(value):
-    number = value if isinstance(value, (int, float, np.number)) else None
-    if number is None or not np.isfinite(number) or number <= 0:
-        return "N/A"
-    return f"${number:,.2f}"
+def first_valid(*values):
+    """Return the first valid non-null value."""
+    for value in values:
+        if value is not None:
+            return value
+    return None
 
 
-def market_snapshot_values(fast_info, info, quote_history):
-    """Combine Yahoo Finance quote fields with historical quote fallbacks."""
-    if quote_history is None or quote_history.empty:
-        return {}
+def fmt_num(value, decimals=2, prefix=""):
+    value = clean_number(value)
 
-    latest_bar = quote_history.iloc[-1]
-    latest_close = _mapping_number({"value": latest_bar.get("Close")}, "value")
-    last_price = _mapping_number(fast_info, "last_price")
-    if last_price is None:
-        last_price = latest_close
+    if value is None:
+        return "—"
 
-    previous_close = _mapping_number(fast_info, "previous_close")
-    if previous_close is None:
-        previous_close = _mapping_number(info, "previousClose")
-    if previous_close is None and len(quote_history) > 1:
-        previous_close = _mapping_number({"value": quote_history["Close"].iloc[-2]}, "value")
+    return f"{prefix}{value:,.{decimals}f}"
 
-    open_price = _mapping_number(fast_info, "open")
-    day_high = _mapping_number(fast_info, "day_high")
-    day_low = _mapping_number(fast_info, "day_low")
-    if open_price is None:
-        open_price = _mapping_number({"value": latest_bar.get("Open")}, "value")
-    if day_high is None:
-        day_high = _mapping_number({"value": latest_bar.get("High")}, "value")
-    if day_low is None:
-        day_low = _mapping_number({"value": latest_bar.get("Low")}, "value")
 
-    session_date = quote_history.index[-1]
+def fmt_integer(value):
+    value = clean_number(value)
+
+    if value is None:
+        return "—"
+
+    return f"{int(value):,}"
+
+
+def fmt_large_number(value):
+    value = clean_number(value)
+
+    if value is None:
+        return "—"
+
+    abs_value = abs(value)
+
+    if abs_value >= 1_000_000_000_000:
+        return f"${value / 1_000_000_000_000:.2f}T"
+
+    if abs_value >= 1_000_000_000:
+        return f"${value / 1_000_000_000:.2f}B"
+
+    if abs_value >= 1_000_000:
+        return f"${value / 1_000_000:.2f}M"
+
+    if abs_value >= 1_000:
+        return f"${value / 1_000:.2f}K"
+
+    return f"${value:,.2f}"
+
+
+def fmt_pct(value):
+    value = clean_number(value)
+
+    if value is None:
+        return "—"
+
+    return f"{value:+.2f}%"
+
+
+def fmt_date(value):
+    if value is None:
+        return "—"
+
     try:
-        session_date = session_date.strftime("%b %d, %Y")
-    except AttributeError:
-        session_date = str(session_date)
+        if isinstance(value, pd.Timestamp):
+            value = value.to_pydatetime()
+
+        if isinstance(value, datetime):
+            return value.strftime("%b %d, %Y")
+
+        if isinstance(value, date):
+            return value.strftime("%b %d, %Y")
+
+        parsed = pd.to_datetime(value, errors="coerce")
+
+        if pd.isna(parsed):
+            return "—"
+
+        return parsed.strftime("%b %d, %Y")
+
+    except Exception:
+        return "—"
+
+
+def safe_text(value):
+    if value is None:
+        return "—"
+
+    try:
+        if pd.isna(value):
+            return "—"
+    except Exception:
+        pass
+
+    text = str(value).strip()
+
+    if not text or text.lower() in {
+        "nan",
+        "none",
+        "n/a",
+        "null",
+        "nat",
+    }:
+        return "—"
+
+    return text
+
+
+def get_info_value(info, *keys):
+    if not isinstance(info, dict):
+        return None
+
+    for key in keys:
+        value = info.get(key)
+
+        if value is not None:
+            try:
+                if pd.isna(value):
+                    continue
+            except Exception:
+                pass
+
+            return value
+
+    return None
+
+
+def safe_history(ticker, period="5d", interval="1d"):
+    try:
+        df = ticker.history(
+            period=period,
+            interval=interval,
+            auto_adjust=False,
+            actions=False,
+        )
+
+        if df is None or df.empty:
+            return None
+
+        df = df.copy()
+
+        required = {"Open", "High", "Low", "Close"}
+
+        if not required.issubset(df.columns):
+            return None
+
+        df = df.dropna(subset=["Close"])
+
+        if df.empty:
+            return None
+
+        return df
+
+    except Exception:
+        return None
+
+
+def extract_date_from_value(value):
+    """Try to extract a date from various Yahoo/yfinance formats."""
+    if value is None:
+        return None
+
+    try:
+        if isinstance(value, pd.Timestamp):
+            return value.to_pydatetime()
+
+        if isinstance(value, datetime):
+            return value
+
+        if isinstance(value, date):
+            return datetime.combine(value, datetime.min.time())
+
+        parsed = pd.to_datetime(value, errors="coerce")
+
+        if pd.isna(parsed):
+            return None
+
+        if isinstance(parsed, pd.Timestamp):
+            return parsed.to_pydatetime()
+
+        return parsed
+
+    except Exception:
+        return None
+
+
+# ============================================================
+# EARNINGS DATE
+# ============================================================
+
+def get_earnings_date(ticker):
+    """
+    Prefer the next future earnings date.
+    If unavailable, use the latest known earnings date.
+    """
+
+    try:
+        earnings = ticker.get_earnings_dates(limit=12)
+
+        if earnings is not None and not earnings.empty:
+            index = earnings.index
+
+            dates = []
+
+            for item in index:
+                parsed = extract_date_from_value(item)
+
+                if parsed is not None:
+                    dates.append(parsed)
+
+            if dates:
+                now = datetime.now()
+
+                future_dates = [
+                    d for d in dates
+                    if d >= now
+                ]
+
+                if future_dates:
+                    return min(future_dates)
+
+                return max(dates)
+
+    except Exception:
+        pass
+
+    # Fallback to calendar
+    try:
+        calendar = ticker.get_calendar()
+
+        if isinstance(calendar, dict):
+            for key in [
+                "Earnings Date",
+                "earningsDate",
+                "Earnings Dates",
+            ]:
+                value = calendar.get(key)
+
+                if value is None:
+                    continue
+
+                if isinstance(value, (list, tuple)):
+                    dates = []
+
+                    for item in value:
+                        parsed = extract_date_from_value(item)
+
+                        if parsed:
+                            dates.append(parsed)
+
+                    if dates:
+                        return min(dates)
+
+                parsed = extract_date_from_value(value)
+
+                if parsed:
+                    return parsed
+
+        elif isinstance(calendar, pd.DataFrame):
+            for column in calendar.columns:
+                if "earn" in str(column).lower():
+                    for value in calendar[column].tolist():
+                        parsed = extract_date_from_value(value)
+
+                        if parsed:
+                            return parsed
+
+            for index in calendar.index:
+                if "earn" in str(index).lower():
+                    values = calendar.loc[index]
+
+                    if isinstance(values, pd.Series):
+                        for value in values.tolist():
+                            parsed = extract_date_from_value(value)
+
+                            if parsed:
+                                return parsed
+
+    except Exception:
+        pass
+
+    return None
+
+
+# ============================================================
+# HOLDER DATA
+# ============================================================
+
+def parse_major_holders(holders):
+    """
+    yfinance's major_holders DataFrame can change orientation.
+    Convert it into a simple dictionary without assuming one layout.
+    """
+
+    result = {}
+
+    if holders is None:
+        return result
+
+    if isinstance(holders, pd.Series):
+        holders = holders.to_frame()
+
+    if not isinstance(holders, pd.DataFrame):
+        return result
+
+    if holders.empty:
+        return result
+
+    # Typical format:
+    #
+    #                    Value
+    #  0.01%    % of Shares Held by All Insider
+    #  0.65%    % of Shares Held by Institutions
+    #
+    for _, row in holders.iterrows():
+
+        values = row.tolist()
+
+        if len(values) < 2:
+            continue
+
+        value_a = values[0]
+        value_b = values[-1]
+
+        text = None
+        metric = None
+
+        if isinstance(value_a, str):
+            text = value_a
+            metric = value_b
+
+        elif isinstance(value_b, str):
+            text = value_b
+            metric = value_a
+
+        if text is None:
+            continue
+
+        text_lower = text.lower()
+
+        if "insider" in text_lower:
+            result["insider"] = metric
+
+        elif "institution" in text_lower:
+            result["institution"] = metric
+
+        elif "float" in text_lower:
+            result["float"] = metric
+
+    return result
+
+
+# ============================================================
+# LOAD STOCK DATA
+# ============================================================
+
+@st.cache_data(
+    ttl=86400,
+    max_entries=250,
+    show_spinner=False,
+)
+def load_stock(symbol, refresh_day):
+    """
+    Load stock data.
+
+    refresh_day is intentionally passed into the cache key so the
+    cache naturally refreshes once per calendar day.
+    """
+
+    symbol = symbol.upper().strip()
+
+    ticker = yf.Ticker(symbol)
+
+    errors = []
+
+    # --------------------------------------------------------
+    # HISTORY
+    # --------------------------------------------------------
+
+    history_5d = safe_history(
+        ticker,
+        period="5d",
+        interval="1d",
+    )
+
+    history_1y = None
+
+    if history_5d is None or history_5d.empty:
+        history_1y = safe_history(
+            ticker,
+            period="1y",
+            interval="1d",
+        )
+
+    # --------------------------------------------------------
+    # INFO
+    # --------------------------------------------------------
+
+    info = {}
+
+    try:
+        info = ticker.get_info()
+
+        if not isinstance(info, dict):
+            info = {}
+
+    except Exception as exc:
+        errors.append(
+            f"Company/fundamental data request failed: {type(exc).__name__}"
+        )
+
+    # --------------------------------------------------------
+    # FAST INFO
+    # --------------------------------------------------------
+
+    fast_info = {}
+
+    try:
+        fast_info = dict(ticker.fast_info)
+
+    except Exception:
+        fast_info = {}
+
+    # --------------------------------------------------------
+    # PRICE
+    # --------------------------------------------------------
+
+    current_price = first_valid(
+        get_info_value(
+            info,
+            "currentPrice",
+            "regularMarketPrice",
+        ),
+        fast_info.get("last_price"),
+    )
+
+    # --------------------------------------------------------
+    # OHLC
+    # --------------------------------------------------------
+
+    open_price = None
+    high_price = None
+    low_price = None
+    previous_close = None
+
+    if history_5d is not None and not history_5d.empty:
+
+        latest = history_5d.iloc[-1]
+
+        open_price = clean_number(latest.get("Open"))
+        high_price = clean_number(latest.get("High"))
+        low_price = clean_number(latest.get("Low"))
+
+        if len(history_5d) >= 2:
+            previous_close = clean_number(
+                history_5d.iloc[-2].get("Close")
+            )
+
+    # Use Yahoo quote values if available.
+    open_price = first_valid(
+        get_info_value(info, "open"),
+        open_price,
+        fast_info.get("open"),
+    )
+
+    high_price = first_valid(
+        get_info_value(info, "dayHigh"),
+        high_price,
+        fast_info.get("day_high"),
+    )
+
+    low_price = first_valid(
+        get_info_value(info, "dayLow"),
+        low_price,
+        fast_info.get("day_low"),
+    )
+
+    previous_close = first_valid(
+        get_info_value(
+            info,
+            "previousClose",
+            "regularMarketPreviousClose",
+        ),
+        previous_close,
+        fast_info.get("previous_close"),
+    )
+
+    # --------------------------------------------------------
+    # CURRENT PRICE FALLBACK
+    # --------------------------------------------------------
+
+    if current_price is None:
+
+        if history_5d is not None and not history_5d.empty:
+            current_price = clean_number(
+                history_5d.iloc[-1]["Close"]
+            )
+
+        elif history_1y is not None and not history_1y.empty:
+            current_price = clean_number(
+                history_1y.iloc[-1]["Close"]
+            )
+
+    # --------------------------------------------------------
+    # DAILY CHANGE
+    # --------------------------------------------------------
+
+    change = None
+    change_percent = None
+
+    if current_price is not None and previous_close:
+        change = current_price - previous_close
+        change_percent = (
+            change / previous_close
+        ) * 100
+
+    # --------------------------------------------------------
+    # PE
+    # --------------------------------------------------------
+
+    pe_ratio = first_valid(
+        get_info_value(
+            info,
+            "trailingPE",
+        ),
+        get_info_value(
+            info,
+            "forwardPE",
+        ),
+    )
+
+    # --------------------------------------------------------
+    # EPS
+    # --------------------------------------------------------
+
+    eps = first_valid(
+        get_info_value(
+            info,
+            "trailingEps",
+        ),
+        get_info_value(
+            info,
+            "forwardEps",
+        ),
+    )
+
+    # --------------------------------------------------------
+    # 52 WEEK HIGH / LOW
+    # --------------------------------------------------------
+
+    week_52_high = get_info_value(
+        info,
+        "fiftyTwoWeekHigh",
+    )
+
+    week_52_low = get_info_value(
+        info,
+        "fiftyTwoWeekLow",
+    )
+
+    # Fallback to 1-year history if Yahoo's quote fields
+    # don't provide these values.
+
+    if (
+        week_52_high is None
+        or week_52_low is None
+    ):
+
+        if history_1y is None:
+            history_1y = safe_history(
+                ticker,
+                period="1y",
+                interval="1d",
+            )
+
+        if history_1y is not None and not history_1y.empty:
+
+            if week_52_high is None:
+                try:
+                    week_52_high = history_1y[
+                        "High"
+                    ].max()
+                except Exception:
+                    pass
+
+            if week_52_low is None:
+                try:
+                    week_52_low = history_1y[
+                        "Low"
+                    ].min()
+                except Exception:
+                    pass
+
+    # --------------------------------------------------------
+    # EARNINGS
+    # --------------------------------------------------------
+
+    earnings_date = get_earnings_date(ticker)
+
+    # --------------------------------------------------------
+    # COMPANY DETAILS
+    # --------------------------------------------------------
+
+    company_name = safe_text(
+        get_info_value(
+            info,
+            "longName",
+            "shortName",
+        )
+    )
+
+    sector = safe_text(
+        get_info_value(
+            info,
+            "sector",
+        )
+    )
+
+    industry = safe_text(
+        get_info_value(
+            info,
+            "industry",
+        )
+    )
+
+    country = safe_text(
+        get_info_value(
+            info,
+            "country",
+        )
+    )
+
+    website = safe_text(
+        get_info_value(
+            info,
+            "website",
+        )
+    )
+
+    employees = get_info_value(
+        info,
+        "fullTimeEmployees",
+    )
+
+    currency = safe_text(
+        get_info_value(
+            info,
+            "currency",
+        )
+    )
+
+    exchange = safe_text(
+        get_info_value(
+            info,
+            "exchange",
+            "fullExchangeName",
+        )
+    )
+
+    market_cap = get_info_value(
+        info,
+        "marketCap",
+    )
+
+    business_summary = safe_text(
+        get_info_value(
+            info,
+            "longBusinessSummary",
+        )
+    )
+
+    # --------------------------------------------------------
+    # MAJOR HOLDERS
+    # --------------------------------------------------------
+
+    major_holders = None
+
+    try:
+        major_holders = ticker.get_major_holders()
+
+    except Exception as exc:
+        errors.append(
+            f"Major holders request failed: {type(exc).__name__}"
+        )
+
+    holder_data = parse_major_holders(
+        major_holders
+    )
+
+    # --------------------------------------------------------
+    # INSTITUTIONAL HOLDERS
+    # --------------------------------------------------------
+
+    institutional_holders = None
+
+    try:
+        institutional_holders = (
+            ticker.get_institutional_holders()
+        )
+
+    except Exception as exc:
+        errors.append(
+            f"Institutional holders request failed: "
+            f"{type(exc).__name__}"
+        )
+
+    institutional_count = None
+
+    if (
+        isinstance(
+            institutional_holders,
+            pd.DataFrame,
+        )
+        and not institutional_holders.empty
+    ):
+        institutional_count = len(
+            institutional_holders
+        )
+
+    # --------------------------------------------------------
+    # VALIDATION
+    # --------------------------------------------------------
+
+    usable_data = (
+        current_price is not None
+        or company_name != "—"
+        or (
+            history_5d is not None
+            and not history_5d.empty
+        )
+    )
 
     return {
-        "last_price": last_price,
+        "symbol": symbol,
+        "current_price": current_price,
         "previous_close": previous_close,
         "open": open_price,
-        "high": day_high,
-        "low": day_low,
-        "session_date": session_date,
+        "high": high_price,
+        "low": low_price,
+        "change": change,
+        "change_percent": change_percent,
+        "pe_ratio": pe_ratio,
+        "eps": eps,
+        "earnings_date": earnings_date,
+        "week_52_high": week_52_high,
+        "week_52_low": week_52_low,
+        "company_name": company_name,
+        "sector": sector,
+        "industry": industry,
+        "country": country,
+        "website": website,
+        "employees": employees,
+        "currency": currency,
+        "exchange": exchange,
+        "market_cap": market_cap,
+        "business_summary": business_summary,
+        "major_holders": holder_data,
+        "institutional_holders": institutional_holders,
+        "institutional_count": institutional_count,
+        "usable_data": usable_data,
+        "errors": errors,
+        "loaded_at": datetime.now(),
     }
 
 
-def count_reported_institutional_holders(holders):
-    """Count named holders present in Yahoo Finance's returned holder table."""
-    if holders is None or not isinstance(holders, pd.DataFrame) or holders.empty:
-        return None
-    if "Holder" not in holders.columns:
-        return None
-    names = holders["Holder"].dropna().astype(str).str.strip()
-    names = names[names.ne("")]
-    return int(names.nunique()) if not names.empty else None
+# ============================================================
+# METRIC CARD
+# ============================================================
 
-
-def reported_holder_changes(holders):
-    """Show Yahoo's reported holder change; never infer change from reruns."""
-    if holders is None or not isinstance(holders, pd.DataFrame) or holders.empty:
-        return pd.DataFrame(columns=["Holder", "Current Shares", "Reported Change (%)"])
-
-    rows = []
-    for _, row in holders.iterrows():
-        shares = _mapping_number(row, "Shares")
-        change = _mapping_number(row, "pctChange")
-        rows.append({
-            "Holder": row.get("Holder", "N/A"),
-            "Current Shares": f"{shares:,.0f}" if shares is not None else "N/A",
-            "Reported Change (%)": f"{change * 100:+.2f}%" if change is not None else "N/A",
-        })
-    return pd.DataFrame(rows)
-
-
-def next_earnings_date(calendar, info, today=None):
-    """Format the next future earnings date supplied by Yahoo Finance, if any."""
-    today = today or datetime.now().date()
-    if isinstance(calendar, dict):
-        values = calendar.get("Earnings Date")
-    elif isinstance(calendar, pd.DataFrame):
-        if "Earnings Date" in calendar.index:
-            values = calendar.loc["Earnings Date"]
-        elif "Earnings Date" in calendar.columns:
-            values = calendar["Earnings Date"]
-        else:
-            values = None
-    else:
-        values = None
-    if values is None and isinstance(info, dict):
-        values = info.get("earningsDate")
-        if values is None:
-            values = info.get("earningsTimestampStart") or info.get("earningsTimestamp")
-
-    if isinstance(values, (list, tuple, pd.Series, np.ndarray)):
-        candidates = list(values)
-    elif values is None:
-        candidates = []
-    else:
-        candidates = [values]
-
-    dates = []
-    for value in candidates:
-        if value is None:
-            continue
-        try:
-            if isinstance(value, (int, float, np.integer, np.floating)):
-                if not np.isfinite(value):
-                    continue
-                parsed = pd.to_datetime(value, unit="s", utc=True, errors="coerce")
-            else:
-                parsed = pd.to_datetime(value, utc=True, errors="coerce")
-            if not pd.isna(parsed):
-                dates.append(parsed.date())
-        except (TypeError, ValueError, OverflowError):
-            continue
-
-    future_dates = [date_value for date_value in dates if date_value >= today]
-    return min(future_dates).strftime("%b %d, %Y") if future_dates else None
-
-
-def _set_selected_stock(symbol):
-    st.session_state["stock_selector"] = symbol
-
-
-def _toggle_favorite(symbol):
-    favorites = list(st.session_state.get("favorites", []))
-    if symbol in favorites:
-        favorites.remove(symbol)
-    else:
-        favorites.append(symbol)
-    st.session_state["favorites"] = favorites
-
-
-def apply_orange_white_theme():
-    """Apply orange accents while respecting Streamlit's active color theme."""
+def metric_card(label, value):
     st.markdown(
-        """
-        <style>
-        :root { --dashboard-orange: #f97316; --dashboard-orange-dark: #c2410c; }
-        [data-testid="stAppViewContainer"] { background: var(--background-color); color: var(--text-color); }
-        [data-testid="stHeader"] { background: var(--background-color); }
-        [data-testid="stSidebar"] { background: var(--secondary-background-color); }
-        [data-testid="stMarkdownContainer"] h1,
-        [data-testid="stMarkdownContainer"] h2,
-        [data-testid="stMarkdownContainer"] h3 { color: var(--text-color); }
-        div.stButton > button, div.stDownloadButton > button {
-            border: 1px solid #fdba74; border-radius: 10px; background: var(--secondary-background-color);
-            color: var(--text-color); font-weight: 600;
-            transition: transform .16s ease, background-color .16s ease,
-                        color .16s ease, box-shadow .16s ease, border-color .16s ease;
-        }
-        div.stButton > button:hover, div.stDownloadButton > button:hover {
-            border-color: var(--dashboard-orange); background: var(--dashboard-orange);
-            color: #fff; transform: translateY(-1px);
-            box-shadow: 0 5px 14px rgba(249, 115, 22, .20);
-        }
-        div.stButton > button:active, div.stDownloadButton > button:active {
-            transform: scale(.98);
-        }
-        div.stButton > button:focus-visible, div.stDownloadButton > button:focus-visible {
-            outline: 3px solid rgba(249, 115, 22, .32); outline-offset: 2px;
-        }
-        div.stButton > button[kind="primary"] {
-            border-color: var(--dashboard-orange); background: var(--dashboard-orange);
-            color: #fff;
-        }
-        div.stButton > button[kind="primary"]:hover {
-            border-color: var(--dashboard-orange-dark); background: var(--dashboard-orange-dark);
-        }
-        [data-testid="stMetric"] {
-            border: 1px solid #fed7aa; border-radius: 12px; background: var(--secondary-background-color);
-            padding: 14px 16px;
-        }
-        [data-testid="stMetricLabel"] { color: var(--text-color); }
-        [data-testid="stMetricValue"] { color: var(--text-color); }
-        button[role="tab"][aria-selected="true"] {
-            color: var(--dashboard-orange-dark); border-bottom-color: var(--dashboard-orange);
-        }
-        @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
-        }
-        </style>
+        f"""
+        <div class="metric-card">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value">{value}</div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
-# Configure Streamlit page
-st.set_page_config(
-    page_title="AI Stock Market Dashboard",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
-class StockAnalyzer:
-    def __init__(self):
-        self.scaler = StandardScaler()
-        self.model = RandomForestRegressor(n_estimators=100, random_state=42)
-        
-    def fetch_stock_data(self, symbol, period="1y"):
-        """Fetch quotes and fundamentals from Yahoo Finance through yfinance."""
-        try:
-            stock = yf.Ticker(symbol)
-            data = stock.history(period=period, auto_adjust=False)
-            quote_history = data
+# ============================================================
+# SIDEBAR
+# ============================================================
 
-            # Short selections such as 1d may contain no prior session for the
-            # previous-close fallback, so fetch a small real quote history.
-            if data is None or len(data) < 2:
-                try:
-                    quote_history = stock.history(period="5d", interval="1d", auto_adjust=False)
-                except Exception:
-                    quote_history = data
+with st.sidebar:
 
-            try:
-                info = stock.info or {}
-            except Exception:
-                info = {}
-
-            fast_info = {}
-            try:
-                raw_fast_info = stock.fast_info
-                for key in ("last_price", "previous_close", "open", "day_high", "day_low", "year_high", "year_low"):
-                    value = _mapping_number(raw_fast_info, key)
-                    if value is not None:
-                        fast_info[key] = value
-            except Exception:
-                pass
-
-            try:
-                earnings_calendar = stock.calendar or {}
-            except Exception:
-                earnings_calendar = {}
-
-            try:
-                major_holders = stock.major_holders
-            except Exception:
-                major_holders = None
-
-            try:
-                institutional_holders = stock.institutional_holders
-            except Exception:
-                institutional_holders = None
-
-            try:
-                mutualfund_holders = stock.mutualfund_holders
-            except Exception:
-                mutualfund_holders = None
-
-            year_high = _mapping_number(fast_info, "year_high")
-            year_low = _mapping_number(fast_info, "year_low")
-            if year_high is None:
-                year_high = _mapping_number(info, "fiftyTwoWeekHigh")
-            if year_low is None:
-                year_low = _mapping_number(info, "fiftyTwoWeekLow")
-            if year_high is None or year_low is None:
-                try:
-                    year_data = stock.history(period="1y", interval="1d", auto_adjust=False)
-                    if year_data is not None and not year_data.empty:
-                        if year_high is None and "High" in year_data:
-                            year_high = _mapping_number({"value": year_data["High"].max()}, "value")
-                        if year_low is None and "Low" in year_data:
-                            year_low = _mapping_number({"value": year_data["Low"].min()}, "value")
-                except Exception:
-                    pass
-
-            return (
-                data, info, major_holders, institutional_holders, mutualfund_holders,
-                fast_info, earnings_calendar, quote_history, year_high, year_low,
-            )
-        except Exception as e:
-            st.error(f"Error fetching data for {symbol}: {str(e)}")
-            return None, {}, None, None, None, {}, {}, None, None, None
-    
-    def calculate_technical_indicators(self, data):
-        """Calculate moving averages and volume metrics from historical quotes."""
-        df = data.copy()
-        
-        # Exponential Moving Averages
-        df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
-        df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
-        df['EMA_200'] = df['Close'].ewm(span=200, adjust=False).mean()
-        
-        # Volume indicators
-        df['Volume_SMA'] = df['Volume'].rolling(window=20).mean()
-        df['Volume_ratio'] = df['Volume'] / df['Volume_SMA']
-        
-        # Price-based indicators
-        df['High_Low_Pct'] = (df['High'] - df['Low']) / df['Close'] * 100
-        df['Price_Change'] = df['Close'] - df['Open']
-        df['Price_Change_Pct'] = (df['Close'] - df['Open']) / df['Open'] * 100
-        
-        return df
-    
-    def prepare_ml_features(self, data):
-        """Prepare features for machine learning"""
-        df = data.copy()
-        
-        df['Returns'] = df['Close'].pct_change()
-        df['Returns_5d'] = df['Close'].pct_change(5)
-        df['Returns_10d'] = df['Close'].pct_change(10)
-        
-        for lag in [1, 2, 3, 5, 10]:
-            df[f'Close_lag_{lag}'] = df['Close'].shift(lag)
-            df[f'Volume_lag_{lag}'] = df['Volume'].shift(lag)
-            df[f'Returns_lag_{lag}'] = df['Returns'].shift(lag)
-        
-        for window in [5, 10, 20, 50]:
-            df[f'Close_mean_{window}'] = df['Close'].rolling(window).mean()
-            df[f'Close_std_{window}'] = df['Close'].rolling(window).std()
-            df[f'Volume_mean_{window}'] = df['Volume'].rolling(window).mean()
-            df[f'High_mean_{window}'] = df['High'].rolling(window).mean()
-            df[f'Low_mean_{window}'] = df['Low'].rolling(window).mean()
-        
-        df['Price_vs_EMA20'] = (df['Close'] - df['EMA_20']) / df['EMA_20'] * 100
-        df['Price_vs_EMA50'] = (df['Close'] - df['EMA_50']) / df['EMA_50'] * 100
-        
-        df['Price_volatility_10d'] = df['Returns'].rolling(10).std()
-        df['Price_volatility_20d'] = df['Returns'].rolling(20).std()
-        
-        return df
-    
-    def train_prediction_model(self, data):
-        """Train ML model for price prediction"""
-        df = self.prepare_ml_features(data)
-        df = df.dropna()
-        
-        if len(df) < 5:
-            return None
-        
-        exclude_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits', 
-                       'Returns', 'Returns_5d', 'Returns_10d']
-        feature_cols = [col for col in df.columns if not any(exc in col for exc in exclude_cols)]
-        feature_cols = [col for col in feature_cols if 'lag' in col or 'mean' in col or 
-                       'std' in col or col in ['Price_vs_EMA20', 'Price_vs_EMA50', 
-                                              'Price_volatility_10d', 'Price_volatility_20d']]
-        
-        if len(feature_cols) < 2:
-            return None
-        
-        X = df[feature_cols].ffill().bfill()
-        y = df['Close'].shift(-1)
-        
-        X = X[:-1]
-        y = y[:-1]
-        
-        mask = ~(X.isna().any(axis=1) | y.isna())
-        X = X[mask]
-        y = y[mask]
-        
-        if len(X) < 3:
-            return None
-        
-        test_size_val = 0.2 if len(X) > 10 else 0.1
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size_val, random_state=42)
-        
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_test_scaled = self.scaler.transform(X_test)
-        
-        self.model.fit(X_train_scaled, y_train)
-        
-        train_score = self.model.score(X_train_scaled, y_train)
-        test_score = self.model.score(X_test_scaled, y_test)
-        
-        return {
-            'train_score': train_score,
-            'test_score': test_score,
-            'feature_importance': dict(zip(feature_cols, self.model.feature_importances_)),
-            'last_features': X.iloc[-1:],
-            'feature_cols': feature_cols
-        }
-    
-    def predict_next_price(self, model_info):
-        """Predict next trading day price"""
-        if model_info is None:
-            return None
-        last_features_scaled = self.scaler.transform(model_info['last_features'])
-        prediction = self.model.predict(last_features_scaled)[0]
-        return prediction
-
-def create_performance_metrics(data, symbol):
-    """Create performance metrics visualization"""
-    if len(data) < 2:
-        st.info("Insufficient data points for cumulative returns graph under this timeframe.")
-        return
-        
-    data['Daily_Returns'] = data['Close'].pct_change()
-    data['Cumulative_Returns'] = (1 + data['Daily_Returns']).cumprod() - 1
-    
-    total_return = data['Cumulative_Returns'].iloc[-1] * 100 if not pd.isna(data['Cumulative_Returns'].iloc[-1]) else 0
-    volatility = data['Daily_Returns'].std() * np.sqrt(252) * 100 if len(data) > 5 else 0
-    sharpe_ratio = (data['Daily_Returns'].mean() * 252) / (data['Daily_Returns'].std() * np.sqrt(252)) if len(data) > 5 and data['Daily_Returns'].std() > 0 else 0
-    max_drawdown = ((data['Close'] / data['Close'].expanding().max()) - 1).min() * 100 if len(data) > 1 else 0
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Return", f"{total_return:.1f}%")
-    with col2:
-        st.metric("Volatility (Ann.)", f"{volatility:.1f}%")
-    with col3:
-        st.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
-    with col4:
-        st.metric("Max Drawdown", f"{max_drawdown:.1f}%")
-    
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=data.index,
-            y=data['Cumulative_Returns'] * 100,
-            mode='lines',
-            name='Cumulative Returns',
-            line=dict(color='#f97316', width=2)
-        )
-    )
-    fig.update_layout(
-        title=f'{symbol} Cumulative Returns (%)',
-        xaxis_title='Date',
-        yaxis_title='Cumulative Return (%)',
-        height=400
-    )
-    st.plotly_chart(fig, theme="streamlit", width="stretch")
-
-# Streamlit App
-def main():
-    apply_orange_white_theme()
-    st.session_state.setdefault("favorites", [])
-    st.session_state.setdefault("stock_selector", "AAPL")
-
-    st.title("🚀 Professional AI Stock Market Dashboard")
-    st.markdown("*Yahoo Finance market data, company fundamentals, and machine learning analysis*")
-    
-    # Sidebar
-    st.sidebar.header("📊 Dashboard Controls")
-    st.sidebar.markdown("---")
-    
-    popular_stocks = {
-        'Apple': 'AAPL', 'Microsoft': 'MSFT', 'Google': 'GOOGL', 
-        'Amazon': 'AMZN', 'Tesla': 'TSLA', 'NVIDIA': 'NVDA',
-        'Meta': 'META', 'Netflix': 'NFLX', 'AMD': 'AMD', 'Intel': 'INTC'
-    }
-    
-    ticker_names = {ticker: name for name, ticker in popular_stocks.items()}
-    stock_options = list(dict.fromkeys(list(popular_stocks.values()) + list(st.session_state["favorites"])))
-    stock_options.append("Custom")
-    if st.session_state["stock_selector"] not in stock_options:
-        st.session_state["stock_selector"] = "AAPL"
-
-    selected_stock = st.sidebar.selectbox(
-        "🏢 Select Stock:",
-        options=stock_options,
-        format_func=lambda ticker: "Enter a custom symbol" if ticker == "Custom" else f"{ticker_names[ticker]} ({ticker})" if ticker in ticker_names else ticker,
-        key="stock_selector",
-    )
-
-    if selected_stock == 'Custom':
-        symbol = st.sidebar.text_input("Enter Stock Symbol:", value="AAPL", max_chars=10).strip().upper()
-    else:
-        symbol = selected_stock
-    
-    period = st.sidebar.selectbox(
-        "📅 Analysis Period:",
-        options=['1d', '1wk', '1mo', '3mo', '6mo', '1y', '2y', '5y'],
-        index=2
-    )
-    
-    st.sidebar.markdown("---")
-    
-    show_prediction = st.sidebar.checkbox("🔮 ML Price Prediction", value=True)
-    show_performance = st.sidebar.checkbox("📊 Performance Metrics", value=True)
-    
-    st.sidebar.markdown("---")
-    
-    if st.sidebar.button("🔄 Refresh Data", type="primary"):
-        st.cache_data.clear()
-        st.rerun()
-    
-    if symbol:
-        is_favorite = symbol in st.session_state["favorites"]
-        st.button(
-            "★ Remove from Favorites" if is_favorite else "☆ Add to Favorites",
-            type="primary",
-            key=f"favorite-toggle-{symbol}",
-            on_click=_toggle_favorite,
-            args=(symbol,),
-        )
-
-    st.subheader("⭐ Favorites")
-    favorites = list(st.session_state["favorites"])
-    if favorites:
-        for offset in range(0, len(favorites), 5):
-            favorite_row = favorites[offset:offset + 5]
-            favorite_columns = st.columns(len(favorite_row))
-            for column, favorite in zip(favorite_columns, favorite_row):
-                with column:
-                    label = f"✓ {favorite} · Selected" if favorite == symbol else f"★ {favorite}"
-                    st.button(
-                        label,
-                        key=f"favorite-select-{favorite}",
-                        on_click=_set_selected_stock,
-                        args=(favorite,),
-                    )
-    else:
-        st.caption("Add a stock to Favorites to keep it one click away during this session.")
-
-    analyzer = StockAnalyzer()
-    
-    with st.spinner(f"📡 Fetching Yahoo Finance data for {symbol}..."):
-        (
-            data, info, major_holders, institutional_holders, mutualfund_holders,
-            fast_info, earnings_calendar, quote_history, year_high, year_low,
-        ) = analyzer.fetch_stock_data(symbol, period)
-    
-    if data is None or data.empty:
-        st.error(f"❌ Could not fetch data for {symbol}. Please verify the symbol and try again.")
-        st.info("💡 Try popular symbols like AAPL, MSFT, GOOGL, TSLA, etc.")
-        return
-    
-    with st.spinner("⚙️ Calculating metrics..."):
-        data = analyzer.calculate_technical_indicators(data)
-    
-    st.markdown("---")
-    
-    if quote_history is None or quote_history.empty:
-        quote_history = data
-    snapshot = market_snapshot_values(fast_info, info, quote_history)
-    latest_price = snapshot.get("last_price")
-    previous_close = snapshot.get("previous_close")
-    open_price = snapshot.get("open")
-    day_high = snapshot.get("high")
-    day_low = snapshot.get("low")
-    price_change = latest_price - previous_close if latest_price is not None and previous_close is not None else None
-    price_change_pct = (price_change / previous_close) * 100 if price_change is not None and previous_close else None
-    volume = _mapping_number({"value": data["Volume"].iloc[-1] if "Volume" in data else None}, "value")
-    avg_volume = data["Volume"].rolling(20).mean().iloc[-1] if len(data) >= 20 else (data["Volume"].mean() if "Volume" in data else None)
-    volume_change = ((volume - avg_volume) / avg_volume) * 100 if volume is not None and avg_volume and avg_volume > 0 else None
-    market_cap = _mapping_number(info, "marketCap")
-    if market_cap is None:
-        market_cap = _mapping_number(fast_info, "market_cap")
-    ema_20 = _mapping_number({"value": data["EMA_20"].iloc[-1]}, "value")
-
-    st.subheader(f"📌 {symbol} · Market Snapshot")
-    latest_session = snapshot.get("session_date", "N/A")
-    st.caption(f"Latest available trading session: {latest_session}. Quotes are supplied by Yahoo Finance through yfinance and may be delayed.")
-    market_columns = st.columns(4)
-    with market_columns[0]:
-        st.metric("💰 Last Price", _format_price(latest_price), delta=f"{price_change:+.2f} ({price_change_pct:+.2f}%)" if price_change is not None and price_change_pct is not None else None)
-    with market_columns[1]:
-        st.metric("Previous Close", _format_price(previous_close))
-    with market_columns[2]:
-        st.metric("Open", _format_price(open_price))
-    with market_columns[3]:
-        st.metric("Volume", f"{volume:,.0f}" if volume is not None and volume > 0 else "N/A", delta=f"{volume_change:+.1f}% vs avg" if volume_change is not None else None)
-
-    price_columns = st.columns(4)
-    with price_columns[0]:
-        st.metric("High", _format_price(day_high))
-    with price_columns[1]:
-        st.metric("Low", _format_price(day_low))
-    with price_columns[2]:
-        if market_cap and market_cap > 0:
-            cap_display = f"${market_cap/1e12:,.2f}T" if market_cap >= 1e12 else f"${market_cap/1e9:,.1f}B" if market_cap >= 1e9 else f"${market_cap/1e6:,.0f}M"
-        else:
-            cap_display = "N/A"
-        st.metric("Market Cap", cap_display)
-    with price_columns[3]:
-        st.metric("EMA 20", _format_price(ema_20))
-
-    trailing_pe = _mapping_number(info, "trailingPE")
-    trailing_eps = _mapping_number(info, "trailingEps")
-    earnings_date = next_earnings_date(earnings_calendar, info)
-    st.subheader("📚 Company Fundamentals")
-    fundamental_columns = st.columns(5)
-    with fundamental_columns[0]:
-        st.metric("P/E Ratio (trailing)", f"{trailing_pe:.2f}" if trailing_pe is not None else "N/A")
-    with fundamental_columns[1]:
-        st.metric("EPS (trailing)", f"${trailing_eps:,.2f}" if trailing_eps is not None else "N/A")
-    with fundamental_columns[2]:
-        st.metric("Next Earnings Date", earnings_date or "N/A")
-    with fundamental_columns[3]:
-        st.metric("52-Week High", _format_price(year_high))
-    with fundamental_columns[4]:
-        st.metric("52-Week Low", _format_price(year_low))
-    st.caption("Fundamentals and calendar dates come from Yahoo Finance. Earnings dates can be estimates and may change; unsupported fields stay N/A rather than being inferred.")
-    
-    st.markdown("---")
-    
-    if show_performance:
-        st.subheader("📊 Performance Analysis")
-        create_performance_metrics(data, symbol)
-    
-    if show_prediction:
-        st.subheader("🔮 Machine Learning Price Prediction")
-        col_pred1, col_pred2 = st.columns([1, 1])
-        
-        with col_pred1:
-            with st.spinner("🤖 Training AI prediction model..."):
-                model_info = analyzer.train_prediction_model(data)
-            
-            if model_info:
-                prediction = analyzer.predict_next_price(model_info)
-                current_price = data['Close'].iloc[-1]
-                predicted_change = ((prediction - current_price) / current_price) * 100
-                
-                st.success("✅ Model trained successfully!")
-                
-                sub_col1, sub_col2 = st.columns(2)
-                with sub_col1:
-                    st.metric(
-                        label="🎯 Next Day Prediction",
-                        value=f"${prediction:,.2f}",
-                        delta=f"{predicted_change:+.2f}%"
-                    )
-                
-                with sub_col2:
-                    st.metric(
-                        label="🎲 Test R² Score",
-                        value=f"{model_info['test_score']:.1%}",
-                    )
-                
-                st.info(f"📈 **Training R²:** {model_info['train_score']:.1%} | **Test R²:** {model_info['test_score']:.1%}. R² measures model fit and is not a probability of a correct prediction.")
-            else:
-                st.warning("⚠️ Insufficient data points for reliable ML prediction under this timeframe.")
-        
-        with col_pred2:
-            if model_info:
-                importance_df = pd.DataFrame(
-                    list(model_info['feature_importance'].items()),
-                    columns=['Feature', 'Importance']
-                ).sort_values('Importance', ascending=False).head(10)
-                
-                fig_importance = px.bar(
-                    importance_df, 
-                    x='Importance', 
-                    y='Feature',
-                    orientation='h',
-                    title="🔍 Top 10 Most Important Features",
-                    color_discrete_sequence=["#f97316"],
-                )
-                fig_importance.update_layout(height=400)
-                st.plotly_chart(fig_importance, theme="streamlit", width="stretch")
-    
-    st.markdown("---")
-    
-    tab1, tab2, tab3 = st.tabs(["📋 Company Info & Holders", "📊 Volume Comparison & Raw Data", "🔧 Technical Metrics"])
-    
-    with tab1:
-        if info or institutional_holders is not None or mutualfund_holders is not None:
-            c1, c2 = st.columns(2)
-            
-            with c1:
-                st.write("### 🏢 Company Details")
-                emp_count = info.get('fullTimeEmployees')
-                formatted_emp = f"{emp_count:,}" if emp_count and isinstance(emp_count, (int, float)) else 'N/A'
-                
-                company_info = {
-                    "Company Name": info.get('longName', 'N/A'),
-                    "Sector": info.get('sector', 'N/A'),
-                    "Industry": info.get('industry', 'N/A'),
-                    "Country": info.get('country', 'N/A'),
-                    "Website": info.get('website', 'N/A'),
-                    "Employees": formatted_emp
-                }
-                for key, value in company_info.items():
-                    st.write(f"**{key}:** {value}")
-            
-            with c2:
-                st.write("### 🏛️ Major Holders Breakdown")
-                insider_pct = _mapping_number(info, 'heldPercentInsiders')
-                inst_pct = _mapping_number(info, 'heldPercentInstitutions')
-                reported_holder_count = count_reported_institutional_holders(institutional_holders)
-                
-                breakdown_data = {
-                    "Value": [
-                        f"{insider_pct*100:.2f}%" if insider_pct is not None else "N/A",
-                        f"{inst_pct*100:.2f}%" if inst_pct is not None else "N/A",
-                        f"{reported_holder_count:,}" if reported_holder_count is not None else "N/A",
-                    ],
-                    "Breakdown Metric": [
-                        "% of Shares Held by All Insiders",
-                        "% of Shares Held by Institutions",
-                        "Number of Institutions Holding Shares"
-                    ]
-                }
-                st.dataframe(pd.DataFrame(breakdown_data), width="stretch")
-                st.caption("The institution count is the number of named entries in Yahoo Finance's available holder list; it may not include every institution holding shares.")
-            
-            st.markdown("---")
-            st.write("### 🏛️ Top Institutional Holders & Reported Changes")
-            
-            if institutional_holders is not None and not institutional_holders.empty:
-                formatted_inst = institutional_holders.copy()
-                if 'Shares' in formatted_inst.columns:
-                    formatted_inst['Shares'] = formatted_inst['Shares'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else x)
-                if 'Value' in formatted_inst.columns:
-                    formatted_inst['Value'] = formatted_inst['Value'].apply(lambda x: f"${x:,.0f}" if pd.notnull(x) else x)
-                if 'pctHeld' in formatted_inst.columns:
-                    formatted_inst['pctHeld'] = formatted_inst['pctHeld'].apply(lambda x: f"{x*100:.2f}%" if pd.notnull(x) else x)
-                if 'pctChange' in formatted_inst.columns:
-                    formatted_inst['pctChange'] = formatted_inst['pctChange'].apply(lambda x: f"{x*100:.2f}%" if pd.notnull(x) else x)
-
-                st.dataframe(reported_holder_changes(institutional_holders), width="stretch")
-                st.caption("Change percentages come from Yahoo Finance's reported holder data. Missing provider values are shown as N/A.")
-                
-                st.write("📋 **Yahoo Finance Reported Institutional Holder Data:**")
-                st.dataframe(formatted_inst, width="stretch")
-            else:
-                st.warning("Detailed institutional holders data currently unavailable via API for this ticker.")
-            
-            st.markdown("---")
-            st.write("### 📈 Top Mutual Fund Holders")
-            if mutualfund_holders is not None and not mutualfund_holders.empty:
-                formatted_mf = mutualfund_holders.copy()
-                if 'Shares' in formatted_mf.columns:
-                    formatted_mf['Shares'] = formatted_mf['Shares'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else x)
-                if 'Value' in formatted_mf.columns:
-                    formatted_mf['Value'] = formatted_mf['Value'].apply(lambda x: f"${x:,.0f}" if pd.notnull(x) else x)
-                if 'pctHeld' in formatted_mf.columns:
-                    formatted_mf['pctHeld'] = formatted_mf['pctHeld'].apply(lambda x: f"{x*100:.2f}%" if pd.notnull(x) else x)
-                
-                st.dataframe(formatted_mf, width="stretch")
-            else:
-                st.warning("Mutual fund holders data currently unavailable via API for this ticker.")
-        else:
-            st.warning("Company information not available")
-    
-    with tab2:
-        st.write("### 📊 Multi-Horizon Volume Comparison (1 Day, 1 Week, 1 Month, 3 Months)")
-        
-        vol_comparison_data = {}
-        horizon_labels = {'1d': '1 Day', '1wk': '1 Week', '1mo': '1 Month', '3mo': '3 Months'}
-        
-        for h_key, h_label in horizon_labels.items():
-            try:
-                temp_hist = yf.Ticker(symbol).history(period=h_key, auto_adjust=False)
-                if not temp_hist.empty:
-                    average_volume = temp_hist['Volume'].mean()
-                    vol_comparison_data[h_label] = float(average_volume) if pd.notna(average_volume) else np.nan
-                else:
-                    vol_comparison_data[h_label] = np.nan
-            except Exception:
-                vol_comparison_data[h_label] = np.nan
-                
-        vol_comp_df = pd.DataFrame(list(vol_comparison_data.items()), columns=['Time Horizon', 'Average Volume'])
-        
-        if vol_comp_df['Average Volume'].notna().any():
-            fig_multi_vol = px.bar(
-                vol_comp_df,
-                x='Time Horizon',
-                y='Average Volume',
-                text_auto=',.2s',
-                title=f"{symbol} - Average Volume Across Time Horizons",
-                color='Average Volume',
-                color_continuous_scale='Oranges'
-            )
-            fig_multi_vol.update_layout(height=400)
-            st.plotly_chart(fig_multi_vol, theme="streamlit", width="stretch")
-        else:
-            st.info("Yahoo Finance did not return volume history for these comparison periods.")
-        
-        st.markdown("---")
-        st.write("### 📊 Recent Price & Volume Table")
-        display_data = data[['Open', 'High', 'Low', 'Close', 'Volume', 'Volume_SMA']].tail(20).copy()
-        display_data.index = display_data.index.strftime('%Y-%m-%d')
-        
-        for col in ['Open', 'High', 'Low', 'Close']:
-            display_data[col] = display_data[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "N/A")
-        display_data['Volume'] = display_data['Volume'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "N/A")
-        display_data['Volume_SMA'] = display_data['Volume_SMA'].apply(lambda x: f"{x:,.0f}" if pd.notnull(x) else "N/A")
-        
-        st.dataframe(display_data, width="stretch")
-        
-        csv = data[['Open', 'High', 'Low', 'Close', 'Volume']].tail(20).to_csv()
-        st.download_button(
-            label="📥 Download Data as CSV",
-            data=csv,
-            file_name=f'{symbol}_stock_data.csv',
-            mime='text/csv'
-        )
-    
-    with tab3:
-        st.write("### 🔧 Technical Indicators (EMA 20, EMA 50, EMA 200)")
-        tech_columns = ['Close', 'EMA_20', 'EMA_50', 'EMA_200']
-        available_columns = [col for col in tech_columns if col in data.columns]
-        
-        if available_columns:
-            tech_data = data[available_columns].tail(10).copy()
-            tech_data.index = tech_data.index.strftime('%Y-%m-%d')
-            
-            for col in available_columns:
-                tech_data[col] = tech_data[col].apply(lambda x: f"{x:,.2f}" if pd.notnull(x) else "N/A")
-                
-            st.dataframe(tech_data, width="stretch")
-        else:
-            st.warning("Technical indicators not available")
-    
-    st.markdown("---")
     st.markdown(
         """
-        <div style='text-align: center; color: #666; padding: 20px;'>
-            <p>🚀 <strong>AI Stock Dashboard</strong> - Professional financial analytics with machine learning</p>
-            <p><em>⚠️ This is for educational purposes only. Not financial advice.</em></p>
-            <p>Built with ❤️ by <a href='' target='_blank'>Kushal Dhakal</a></p>
+        <div style="
+            font-size: 1.5rem;
+            font-weight: 850;
+            margin-bottom: 4px;
+        ">
+            📈 Stock Dashboard
         </div>
-        """, 
-        unsafe_allow_html=True
+        """,
+        unsafe_allow_html=True,
     )
 
-if __name__ == "__main__":
-    main()
+    st.caption(
+        "Clean market data, fundamentals and favorites."
+    )
+
+    st.divider()
+
+    ticker_input = st.text_input(
+        "Stock Symbol",
+        value=st.session_state.selected_symbol,
+        placeholder="AAPL",
+        help="Enter a stock ticker such as AAPL, MSFT, NVDA or TSLA.",
+    ).upper().strip()
+
+    if st.button(
+        "Load Stock",
+        type="primary",
+        use_container_width=True,
+    ):
+        if ticker_input:
+
+            st.session_state.selected_symbol = (
+                ticker_input
+            )
+
+            st.session_state.last_loaded = (
+                datetime.now()
+            )
+
+            st.rerun()
+
+    st.markdown("### Favorites")
+
+    if st.session_state.favorites:
+
+        for favorite in st.session_state.favorites:
+
+            if st.button(
+                f"★ {favorite}",
+                key=f"favorite_{favorite}",
+                use_container_width=True,
+            ):
+                st.session_state.selected_symbol = (
+                    favorite
+                )
+
+                st.session_state.last_loaded = (
+                    datetime.now()
+                )
+
+                st.rerun()
+
+    else:
+        st.caption(
+            "No favorite stocks yet."
+        )
+
+    st.divider()
+
+    if st.button(
+        "↻ Refresh Data",
+        use_container_width=True,
+    ):
+
+        st.cache_data.clear()
+
+        st.session_state.last_loaded = (
+            datetime.now()
+        )
+
+        st.rerun()
+
+    st.caption(
+        "Data cache refreshes automatically every 24 hours."
+    )
+
+    st.divider()
+
+    st.markdown(
+        """
+        <div class="small-muted">
+        Data source: Yahoo Finance through yfinance.<br><br>
+        Market data can be delayed and may be unavailable
+        during provider outages or rate limits.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================
+# LOAD SELECTED STOCK
+# ============================================================
+
+symbol = (
+    st.session_state.selected_symbol
+    .upper()
+    .strip()
+)
+
+if not symbol:
+    symbol = "AAPL"
+
+today = date.today().isoformat()
+
+with st.spinner(
+    f"Loading {symbol} market data..."
+):
+
+    data = load_stock(
+        symbol,
+        today,
+    )
+
+
+# ============================================================
+# ERROR HANDLING
+# ============================================================
+
+if not data["usable_data"]:
+
+    st.markdown(
+        f"""
+        <div class="error-box">
+            <strong>Could not load {symbol}.</strong><br><br>
+            Yahoo Finance did not return usable market data.
+            This dashboard will not invent numbers just to make
+            the interface look pretty.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if data["errors"]:
+
+        st.write("Technical notices:")
+
+        for error in data["errors"]:
+            st.caption(error)
+
+    st.stop()
+
+
+# ============================================================
+# HEADER
+# ============================================================
+
+company_name = data["company_name"]
+
+price = data["current_price"]
+
+change = data["change"]
+
+change_percent = data["change_percent"]
+
+
+if change_percent is not None:
+
+    if change_percent > 0:
+
+        change_class = "positive"
+
+    elif change_percent < 0:
+
+        change_class = "negative"
+
+    else:
+
+        change_class = "neutral"
+
+else:
+
+    change_class = "neutral"
+
+
+change_text = (
+    f"{fmt_num(change, 2)} "
+    f"({fmt_pct(change_percent)})"
+)
+
+
+st.markdown(
+    '<div class="main-title">AI Stock Dashboard</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="subtitle">'
+    'Market overview, fundamentals and company information'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+
+st.markdown(
+    f"""
+    <div class="stock-header">
+        <div class="ticker">{symbol}</div>
+        <div class="company-name">{company_name}</div>
+
+        <div class="price">
+            {fmt_num(price, 2)}
+        </div>
+
+        <div class="{change_class}">
+            {change_text}
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# FAVORITE BUTTON
+# ============================================================
+
+is_favorite = (
+    symbol in st.session_state.favorites
+)
+
+favorite_col1, favorite_col2, _ = st.columns(
+    [1.2, 1.2, 5]
+)
+
+with favorite_col1:
+
+    if not is_favorite:
+
+        if st.button(
+            "☆ Add Favorite",
+            type="primary",
+            use_container_width=True,
+        ):
+
+            if symbol not in st.session_state.favorites:
+
+                st.session_state.favorites.append(
+                    symbol
+                )
+
+            st.rerun()
+
+    else:
+
+        if st.button(
+            "★ Remove Favorite",
+            use_container_width=True,
+        ):
+
+            st.session_state.favorites = [
+                x
+                for x in st.session_state.favorites
+                if x != symbol
+            ]
+
+            st.rerun()
+
+
+# ============================================================
+# MARKET SNAPSHOT
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">'
+    'Market Snapshot'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+snapshot_cols = st.columns(4)
+
+with snapshot_cols[0]:
+    metric_card(
+        "Previous Close",
+        fmt_num(
+            data["previous_close"],
+            2,
+        ),
+    )
+
+with snapshot_cols[1]:
+    metric_card(
+        "Open",
+        fmt_num(
+            data["open"],
+            2,
+        ),
+    )
+
+with snapshot_cols[2]:
+    metric_card(
+        "Day High",
+        fmt_num(
+            data["high"],
+            2,
+        ),
+    )
+
+with snapshot_cols[3]:
+    metric_card(
+        "Day Low",
+        fmt_num(
+            data["low"],
+            2,
+        ),
+    )
+
+
+snapshot_cols_2 = st.columns(4)
+
+with snapshot_cols_2[0]:
+    metric_card(
+        "P/E Ratio",
+        fmt_num(
+            data["pe_ratio"],
+            2,
+        ),
+    )
+
+with snapshot_cols_2[1]:
+    metric_card(
+        "EPS",
+        fmt_num(
+            data["eps"],
+            2,
+        ),
+    )
+
+with snapshot_cols_2[2]:
+    metric_card(
+        "52 Week High",
+        fmt_num(
+            data["week_52_high"],
+            2,
+        ),
+    )
+
+with snapshot_cols_2[3]:
+    metric_card(
+        "52 Week Low",
+        fmt_num(
+            data["week_52_low"],
+            2,
+        ),
+    )
+
+
+# ============================================================
+# EARNINGS
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">'
+    'Earnings'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+earn_cols = st.columns(3)
+
+with earn_cols[0]:
+
+    metric_card(
+        "Next / Latest Earnings Date",
+        fmt_date(
+            data["earnings_date"]
+        ),
+    )
+
+with earn_cols[1]:
+
+    metric_card(
+        "Market Cap",
+        fmt_large_number(
+            data["market_cap"]
+        ),
+    )
+
+with earn_cols[2]:
+
+    metric_card(
+        "Exchange",
+        safe_text(
+            data["exchange"]
+        ),
+    )
+
+
+# ============================================================
+# COMPANY DETAILS
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">'
+    'Company Details'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+details_left, details_right = st.columns(2)
+
+with details_left:
+
+    st.markdown(
+        '<div class="info-card">',
+        unsafe_allow_html=True,
+    )
+
+    rows = [
+        (
+            "Company Name",
+            data["company_name"],
+        ),
+        (
+            "Sector",
+            data["sector"],
+        ),
+        (
+            "Industry",
+            data["industry"],
+        ),
+        (
+            "Country",
+            data["country"],
+        ),
+    ]
+
+    for label, value in rows:
+
+        st.markdown(
+            f"""
+            <div class="info-row">
+                <div class="info-label">
+                    {label}
+                </div>
+
+                <div class="info-value">
+                    {safe_text(value)}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+with details_right:
+
+    st.markdown(
+        '<div class="info-card">',
+        unsafe_allow_html=True,
+    )
+
+    website = data["website"]
+
+    if website != "—":
+
+        website_display = (
+            f'<a href="{website}" '
+            'target="_blank">'
+            f'{website}'
+            '</a>'
+        )
+
+    else:
+
+        website_display = "—"
+
+    rows = [
+        (
+            "Website",
+            website_display,
+        ),
+        (
+            "Employees",
+            fmt_integer(
+                data["employees"]
+            ),
+        ),
+        (
+            "Currency",
+            data["currency"],
+        ),
+        (
+            "Exchange",
+            data["exchange"],
+        ),
+    ]
+
+    for label, value in rows:
+
+        st.markdown(
+            f"""
+            <div class="info-row">
+                <div class="info-label">
+                    {label}
+                </div>
+
+                <div class="info-value">
+                    {value}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================
+# BUSINESS DESCRIPTION
+# ============================================================
+
+if data["business_summary"] != "—":
+
+    with st.expander(
+        "Business Description"
+    ):
+
+        st.write(
+            data["business_summary"]
+        )
+
+
+# ============================================================
+# HOLDERS
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">'
+    'Major Holders Breakdown'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+holders = data["major_holders"]
+
+holder_cols = st.columns(3)
+
+with holder_cols[0]:
+
+    insider = holders.get(
+        "insider"
+    )
+
+    metric_card(
+        "Insider Ownership",
+        safe_text(insider),
+    )
+
+with holder_cols[1]:
+
+    institution = holders.get(
+        "institution"
+    )
+
+    metric_card(
+        "Institutional Ownership",
+        safe_text(institution),
+    )
+
+with holder_cols[2]:
+
+    float_value = holders.get(
+        "float"
+    )
+
+    metric_card(
+        "Float",
+        safe_text(float_value),
+    )
+
+
+# ============================================================
+# INSTITUTIONAL HOLDERS
+# ============================================================
+
+institutional_df = data[
+    "institutional_holders"
+]
+
+if (
+    isinstance(
+        institutional_df,
+        pd.DataFrame,
+    )
+    and not institutional_df.empty
+):
+
+    st.markdown(
+        '<div class="section-title">'
+        'Institutional Holders'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    display_df = institutional_df.copy()
+
+    # Limit display columns to useful ones.
+    preferred_columns = [
+        "Holder",
+        "Shares",
+        "Date Reported",
+        "% Out",
+        "Value",
+    ]
+
+    available_columns = [
+        column
+        for column in preferred_columns
+        if column in display_df.columns
+    ]
+
+    if available_columns:
+
+        display_df = display_df[
+            available_columns
+        ]
+
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+# ============================================================
+# FAVORITES SECTION
+# ============================================================
+
+st.markdown(
+    '<div class="section-title">'
+    'Favorites'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+if st.session_state.favorites:
+
+    favorite_cols = st.columns(
+        min(
+            len(
+                st.session_state.favorites
+            ),
+            4,
+        )
+    )
+
+    for index, favorite in enumerate(
+        st.session_state.favorites
+    ):
+
+        with favorite_cols[
+            index % len(favorite_cols)
+        ]:
+
+            if favorite == symbol:
+
+                favorite_label = (
+                    f"★ {favorite}"
+                )
+
+            else:
+
+                favorite_label = (
+                    f"☆ {favorite}"
+                )
+
+            st.markdown(
+                f"""
+                <div class="favorite-card">
+                    <strong>
+                        {favorite_label}
+                    </strong>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+else:
+
+    st.caption(
+        "Your favorite stocks will appear here."
+    )
+
+
+# ============================================================
+# DATA INTEGRITY
+# ============================================================
+
+st.markdown(
+    '<div class="source-box">'
+    '<strong>Data integrity</strong><br>'
+    'This dashboard uses Yahoo Finance data through '
+    'yfinance. Missing values are displayed as '
+    '<strong>—</strong> rather than being fabricated. '
+    'Yahoo Finance data may be delayed, incomplete, '
+    'temporarily unavailable, or rate-limited.'
+    '</div>',
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# NON-FATAL ERRORS
+# ============================================================
+
+if data["errors"]:
+
+    with st.expander(
+        "Non-fatal data-source notices"
+    ):
+
+        for error in data["errors"]:
+
+            st.warning(error)
+
+
+# ============================================================
+# LAST UPDATED
+# ============================================================
+
+loaded_at = data["loaded_at"]
+
+st.markdown(
+    f"""
+    <div style="
+        text-align: center;
+        color: #999;
+        font-size: 0.75rem;
+        margin-top: 28px;
+        padding-bottom: 20px;
+    ">
+        Data loaded: {loaded_at.strftime("%b %d, %Y at %I:%M:%S %p")}
+        <br>
+        Cache refresh interval: 24 hours
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
