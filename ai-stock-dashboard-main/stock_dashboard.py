@@ -10,6 +10,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import warnings
+from time import monotonic
 warnings.filterwarnings('ignore')
 
 
@@ -304,9 +305,16 @@ class StockAnalyzer:
         self.scaler = StandardScaler()
         self.model = RandomForestRegressor(n_estimators=100, random_state=42)
         
-    @st.cache_data(ttl=300, show_spinner=False)
     def fetch_stock_data(_self, symbol, period="1y"):
         """Fetch quotes and fundamentals from Yahoo Finance through yfinance."""
+        cache = st.session_state.setdefault("stock_data_cache", {})
+        cache_key = (symbol, period)
+        cached_entry = cache.get(cache_key)
+        if cached_entry is not None:
+            saved_at, saved_result = cached_entry
+            if monotonic() - saved_at < 300:
+                return saved_result
+
         provider_issues = []
         try:
             stock = yf.Ticker(symbol)
@@ -425,11 +433,13 @@ class StockAnalyzer:
                 except Exception:
                     pass
 
-            return (
+            result = (
                 data, info, major_holders, institutional_holders, mutualfund_holders,
                 fast_info, earnings_calendar, quote_history, year_high, year_low,
                 provider_issues, quote_metadata,
             )
+            cache[cache_key] = (monotonic(), result)
+            return result
         except Exception:
             return None, {}, None, None, None, {}, {}, None, None, None, ["historical prices"], {}
     
@@ -632,7 +642,7 @@ def main():
     st.sidebar.markdown("---")
     
     if st.sidebar.button("🔄 Refresh Data", type="primary"):
-        st.cache_data.clear()
+        st.session_state["stock_data_cache"] = {}
         st.rerun()
     
     if symbol:
