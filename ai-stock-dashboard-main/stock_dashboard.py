@@ -93,6 +93,23 @@ def count_reported_institutional_holders(holders):
     return int(names.nunique()) if not names.empty else None
 
 
+def reported_holder_changes(holders):
+    """Show Yahoo's reported holder change; never infer change from reruns."""
+    if holders is None or not isinstance(holders, pd.DataFrame) or holders.empty:
+        return pd.DataFrame(columns=["Holder", "Current Shares", "Reported Change (%)"])
+
+    rows = []
+    for _, row in holders.iterrows():
+        shares = _mapping_number(row, "Shares")
+        change = _mapping_number(row, "pctChange")
+        rows.append({
+            "Holder": row.get("Holder", "N/A"),
+            "Current Shares": f"{shares:,.0f}" if shares is not None else "N/A",
+            "Reported Change (%)": f"{change * 100:+.2f}%" if change is not None else "N/A",
+        })
+    return pd.DataFrame(rows)
+
+
 def next_earnings_date(calendar, info, today=None):
     """Format the next future earnings date supplied by Yahoo Finance, if any."""
     today = today or datetime.now().date()
@@ -153,20 +170,20 @@ def _toggle_favorite(symbol):
 
 
 def apply_orange_white_theme():
-    """Apply a consistent white canvas, orange accents, and accessible motion."""
+    """Apply orange accents while respecting Streamlit's active color theme."""
     st.markdown(
         """
         <style>
         :root { --dashboard-orange: #f97316; --dashboard-orange-dark: #c2410c; }
-        [data-testid="stAppViewContainer"] { background: #fff; color: #172033; }
-        [data-testid="stHeader"] { background: rgba(255, 255, 255, .92); }
-        [data-testid="stSidebar"] { background: #fff7ed; }
+        [data-testid="stAppViewContainer"] { background: var(--background-color); color: var(--text-color); }
+        [data-testid="stHeader"] { background: var(--background-color); }
+        [data-testid="stSidebar"] { background: var(--secondary-background-color); }
         [data-testid="stMarkdownContainer"] h1,
         [data-testid="stMarkdownContainer"] h2,
-        [data-testid="stMarkdownContainer"] h3 { color: #172033; }
+        [data-testid="stMarkdownContainer"] h3 { color: var(--text-color); }
         div.stButton > button, div.stDownloadButton > button {
-            border: 1px solid #fdba74; border-radius: 10px; background: #fff;
-            color: #9a3412; font-weight: 600;
+            border: 1px solid #fdba74; border-radius: 10px; background: var(--secondary-background-color);
+            color: var(--text-color); font-weight: 600;
             transition: transform .16s ease, background-color .16s ease,
                         color .16s ease, box-shadow .16s ease, border-color .16s ease;
         }
@@ -189,11 +206,11 @@ def apply_orange_white_theme():
             border-color: var(--dashboard-orange-dark); background: var(--dashboard-orange-dark);
         }
         [data-testid="stMetric"] {
-            border: 1px solid #fed7aa; border-radius: 12px; background: #fff;
+            border: 1px solid #fed7aa; border-radius: 12px; background: var(--secondary-background-color);
             padding: 14px 16px;
         }
-        [data-testid="stMetricLabel"] { color: #7c2d12; }
-        [data-testid="stMetricValue"] { color: #172033; }
+        [data-testid="stMetricLabel"] { color: var(--text-color); }
+        [data-testid="stMetricValue"] { color: var(--text-color); }
         button[role="tab"][aria-selected="true"] {
             color: var(--dashboard-orange-dark); border-bottom-color: var(--dashboard-orange);
         }
@@ -437,10 +454,9 @@ def create_performance_metrics(data, symbol):
         title=f'{symbol} Cumulative Returns (%)',
         xaxis_title='Date',
         yaxis_title='Cumulative Return (%)',
-        template='plotly_white',
         height=400
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, theme="streamlit", width="stretch")
 
 # Streamlit App
 def main():
@@ -657,10 +673,9 @@ def main():
                     orientation='h',
                     title="🔍 Top 10 Most Important Features",
                     color_discrete_sequence=["#f97316"],
-                    template='plotly_white'
                 )
                 fig_importance.update_layout(height=400)
-                st.plotly_chart(fig_importance, width="stretch")
+                st.plotly_chart(fig_importance, theme="streamlit", width="stretch")
     
     st.markdown("---")
     
@@ -708,7 +723,7 @@ def main():
                 st.caption("The institution count is the number of named entries in Yahoo Finance's available holder list; it may not include every institution holding shares.")
             
             st.markdown("---")
-            st.write("### 🏛️ Top Institutional Holders & Session Comparison")
+            st.write("### 🏛️ Top Institutional Holders & Reported Changes")
             
             if institutional_holders is not None and not institutional_holders.empty:
                 formatted_inst = institutional_holders.copy()
@@ -721,30 +736,8 @@ def main():
                 if 'pctChange' in formatted_inst.columns:
                     formatted_inst['pctChange'] = formatted_inst['pctChange'].apply(lambda x: f"{x*100:.2f}%" if pd.notnull(x) else x)
 
-                if 'hist_holders' not in st.session_state:
-                    st.session_state['hist_holders'] = {}
-                
-                current_raw_dict = institutional_holders.set_index('Holder')['Shares'].to_dict() if 'Holder' in institutional_holders.columns and 'Shares' in institutional_holders.columns else {}
-                
-                if symbol in st.session_state['hist_holders']:
-                    old_dict = st.session_state['hist_holders'][symbol]
-                    comparison_rows = []
-                    for holder, shares in current_raw_dict.items():
-                        old_shares = old_dict.get(holder, 0)
-                        diff = shares - old_shares
-                        comparison_rows.append({
-                            "Holder": holder,
-                            "Current Shares": f"{shares:,.0f}",
-                            "Previous Tracked Shares": f"{old_shares:,.0f}",
-                            "Change (+/-)": f"{diff:+,.0f}"
-                        })
-                    comp_df = pd.DataFrame(comparison_rows)
-                    st.write("📊 **Comparison with Previously Cached Session Data:**")
-                    st.dataframe(comp_df, width="stretch")
-                else:
-                    st.info("💡 First snapshot for this stock cached in session state. Refresh or update to see comparative deltas.")
-                
-                st.session_state['hist_holders'][symbol] = current_raw_dict
+                st.dataframe(reported_holder_changes(institutional_holders), width="stretch")
+                st.caption("Change percentages come from Yahoo Finance's reported holder data. Missing provider values are shown as N/A.")
                 
                 st.write("📋 **Yahoo Finance Reported Institutional Holder Data:**")
                 st.dataframe(formatted_inst, width="stretch")
@@ -794,12 +787,11 @@ def main():
                 y='Average Volume',
                 text_auto=',.2s',
                 title=f"{symbol} - Average Volume Across Time Horizons",
-                template='plotly_white',
                 color='Average Volume',
                 color_continuous_scale='Oranges'
             )
             fig_multi_vol.update_layout(height=400)
-            st.plotly_chart(fig_multi_vol, width="stretch")
+            st.plotly_chart(fig_multi_vol, theme="streamlit", width="stretch")
         else:
             st.info("Yahoo Finance did not return volume history for these comparison periods.")
         
