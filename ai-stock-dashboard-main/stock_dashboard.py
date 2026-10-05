@@ -428,10 +428,10 @@ class StockAnalyzer:
             return (
                 data, info, major_holders, institutional_holders, mutualfund_holders,
                 fast_info, earnings_calendar, quote_history, year_high, year_low,
-                provider_issues,
+                provider_issues, quote_metadata,
             )
         except Exception:
-            return None, {}, None, None, None, {}, {}, None, None, None, ["historical prices"]
+            return None, {}, None, None, None, {}, {}, None, None, None, ["historical prices"], {}
     
     def calculate_technical_indicators(self, data):
         """Calculate moving averages and volume metrics from historical quotes."""
@@ -669,7 +669,7 @@ def main():
         (
             data, info, major_holders, institutional_holders, mutualfund_holders,
             fast_info, earnings_calendar, quote_history, year_high, year_low,
-            provider_issues,
+            provider_issues, quote_metadata,
         ) = analyzer.fetch_stock_data(symbol, period)
     
     if data is None or data.empty:
