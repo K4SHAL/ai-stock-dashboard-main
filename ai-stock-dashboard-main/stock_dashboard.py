@@ -1,5 +1,5 @@
 import math
-from datetime import datetime, date, timedelta
+from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
@@ -7,7 +7,7 @@ import yfinance as yf
 
 
 # ============================================================
-# PAGE CONFIG
+# PAGE
 # ============================================================
 
 st.set_page_config(
@@ -17,254 +17,114 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
 # ============================================================
-# CUSTOM CSS
+# THEME
 # ============================================================
 
 st.markdown(
     """
-    <style>
-        :root {
-            --orange: #ff7a00;
-            --orange-dark: #e96500;
-            --orange-light: #fff4e8;
-            --text: #171717;
-            --muted: #6b7280;
-            --border: #e7e7e7;
-            --white: #ffffff;
-            --green: #159447;
-            --red: #d83a3a;
-        }
-
-        .stApp {
-            background: #ffffff;
-            color: var(--text);
-        }
-
-        section[data-testid="stSidebar"] {
-            background: #fafafa;
-            border-right: 1px solid #eeeeee;
-        }
-
-        section[data-testid="stSidebar"] h1,
-        section[data-testid="stSidebar"] h2,
-        section[data-testid="stSidebar"] h3 {
-            color: var(--text);
-        }
-
-        .main-title {
-            font-size: 2.4rem;
-            font-weight: 800;
-            letter-spacing: -0.04em;
-            margin-bottom: 0.15rem;
-            color: #111111;
-        }
-
-        .subtitle {
-            color: var(--muted);
-            font-size: 0.95rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .stock-header {
-            background: linear-gradient(
-                135deg,
-                #fff8f1 0%,
-                #ffffff 65%
-            );
-            border: 1px solid #f0dfcf;
-            border-radius: 20px;
-            padding: 24px;
-            margin-bottom: 18px;
-            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.035);
-        }
-
-        .ticker {
-            font-size: 2rem;
-            font-weight: 850;
-            color: #111111;
-            letter-spacing: -0.03em;
-        }
-
-        .company-name {
-            color: #6b7280;
-            font-size: 0.95rem;
-            margin-top: 2px;
-        }
-
-        .price {
-            font-size: 2.5rem;
-            font-weight: 850;
-            letter-spacing: -0.04em;
-            margin-top: 10px;
-        }
-
-        .positive {
-            color: var(--green);
-            font-weight: 700;
-        }
-
-        .negative {
-            color: var(--red);
-            font-weight: 700;
-        }
-
-        .neutral {
-            color: var(--muted);
-            font-weight: 700;
-        }
-
-        .section-title {
-            font-size: 1.25rem;
-            font-weight: 800;
-            margin: 24px 0 12px 0;
-            color: #171717;
-        }
-
-        .metric-card {
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 17px;
-            min-height: 105px;
-            transition:
-                transform 0.18s ease,
-                box-shadow 0.18s ease,
-                border-color 0.18s ease;
-        }
-
-        .metric-card:hover {
-            transform: translateY(-3px);
-            border-color: #ffc38d;
-            box-shadow: 0 10px 28px rgba(255, 122, 0, 0.09);
-        }
-
-        .metric-label {
-            color: #737373;
-            font-size: 0.78rem;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .metric-value {
-            color: #111111;
-            font-size: 1.25rem;
-            font-weight: 800;
-            word-break: break-word;
-        }
-
-        .info-card {
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 14px;
-        }
-
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 20px;
-            padding: 9px 0;
-            border-bottom: 1px solid #f1f1f1;
-        }
-
-        .info-row:last-child {
-            border-bottom: none;
-        }
-
-        .info-label {
-            color: #737373;
-            font-size: 0.88rem;
-        }
-
-        .info-value {
-            color: #171717;
-            font-weight: 700;
-            text-align: right;
-            word-break: break-word;
-        }
-
-        .source-box {
-            background: #fff8f1;
-            border: 1px solid #ffd7b0;
-            border-radius: 14px;
-            padding: 14px 16px;
-            margin-top: 20px;
-            color: #663500;
-            font-size: 0.86rem;
-        }
-
-        .favorite-card {
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 15px;
-            margin-bottom: 8px;
-            transition:
-                transform 0.18s ease,
-                box-shadow 0.18s ease;
-        }
-
-        .favorite-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
-        }
-
-        div.stButton > button {
-            border-radius: 11px;
-            border: 1px solid #dedede;
-            transition:
-                transform 0.15s ease,
-                box-shadow 0.15s ease,
-                background 0.15s ease;
-        }
-
-        div.stButton > button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 18px rgba(255, 122, 0, 0.14);
-            border-color: #ffb36d;
-        }
-
-        div.stButton > button[kind="primary"] {
-            background: var(--orange);
-            color: white;
-            border: none;
-        }
-
-        div.stButton > button[kind="primary"]:hover {
-            background: var(--orange-dark);
-        }
-
-        .small-muted {
-            color: #888888;
-            font-size: 0.78rem;
-        }
-
-        .error-box {
-            background: #fff1f1;
-            border: 1px solid #f3b5b5;
-            color: #8b1e1e;
-            padding: 14px;
-            border-radius: 12px;
-        }
-
-        .warning-box {
-            background: #fff9ed;
-            border: 1px solid #f3d79a;
-            color: #765000;
-            padding: 14px;
-            border-radius: 12px;
-        }
-    </style>
-    """,
+<style>
+.stApp {
+    background: #ffffff;
+}
+section[data-testid="stSidebar"] {
+    background: #fafafa;
+    border-right: 1px solid #eeeeee;
+}
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+    max-width: 1450px;
+}
+.hero {
+    background: linear-gradient(135deg, #fff7ef 0%, #ffffff 72%);
+    border: 1px solid #f4dcc7;
+    border-radius: 22px;
+    padding: 26px;
+    margin: 12px 0 20px 0;
+}
+.hero-symbol {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: #111111;
+}
+.hero-name {
+    color: #6b7280;
+    margin-top: 2px;
+    font-size: 0.95rem;
+}
+.hero-price {
+    font-size: 2.7rem;
+    font-weight: 850;
+    letter-spacing: -0.045em;
+    color: #111111;
+    margin-top: 14px;
+}
+.hero-change-up {
+    color: #168447;
+    font-weight: 750;
+    font-size: 1rem;
+}
+.hero-change-down {
+    color: #d13a3a;
+    font-weight: 750;
+    font-size: 1rem;
+}
+.hero-change-flat {
+    color: #6b7280;
+    font-weight: 750;
+    font-size: 1rem;
+}
+.section-heading {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #171717;
+    margin: 24px 0 12px 0;
+}
+.metric {
+    background: #ffffff;
+    border: 1px solid #e7e7e7;
+    border-radius: 16px;
+    padding: 17px;
+    min-height: 102px;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.metric:hover {
+    transform: translateY(-2px);
+    border-color: #ffbd7b;
+    box-shadow: 0 9px 25px rgba(255, 122, 0, .09);
+}
+.metric-label {
+    color: #737373;
+    font-size: .78rem;
+    font-weight: 650;
+    margin-bottom: 8px;
+}
+.metric-value {
+    color: #111111;
+    font-size: 1.25rem;
+    font-weight: 800;
+}
+.notice {
+    background: #fff7ef;
+    border: 1px solid #ffd4aa;
+    border-radius: 14px;
+    padding: 14px 16px;
+    color: #704000;
+}
+.small-muted {
+    color: #8a8a8a;
+    font-size: .78rem;
+}
+</style>
+""",
     unsafe_allow_html=True,
 )
 
 
 # ============================================================
-# SESSION STATE
+# STATE
 # ============================================================
 
 if "favorites" not in st.session_state:
@@ -273,812 +133,398 @@ if "favorites" not in st.session_state:
 if "selected_symbol" not in st.session_state:
     st.session_state.selected_symbol = "AAPL"
 
-if "last_loaded" not in st.session_state:
-    st.session_state.last_loaded = None
-
 
 # ============================================================
-# HELPERS
+# FORMATTERS
 # ============================================================
 
-def clean_number(value):
-    """Return None for invalid numeric values."""
+def number(value):
     if value is None:
         return None
-
     try:
         if pd.isna(value):
             return None
-
         value = float(value)
-
         if not math.isfinite(value):
             return None
-
         return value
-
     except (TypeError, ValueError):
         return None
 
 
 def first_valid(*values):
-    """Return the first valid non-null value."""
     for value in values:
         if value is not None:
             return value
     return None
 
 
-def fmt_num(value, decimals=2, prefix=""):
-    value = clean_number(value)
-
+def text(value):
     if value is None:
         return "—"
-
-    return f"{prefix}{value:,.{decimals}f}"
-
-
-def fmt_integer(value):
-    value = clean_number(value)
-
-    if value is None:
-        return "—"
-
-    return f"{int(value):,}"
-
-
-def fmt_large_number(value):
-    value = clean_number(value)
-
-    if value is None:
-        return "—"
-
-    abs_value = abs(value)
-
-    if abs_value >= 1_000_000_000_000:
-        return f"${value / 1_000_000_000_000:.2f}T"
-
-    if abs_value >= 1_000_000_000:
-        return f"${value / 1_000_000_000:.2f}B"
-
-    if abs_value >= 1_000_000:
-        return f"${value / 1_000_000:.2f}M"
-
-    if abs_value >= 1_000:
-        return f"${value / 1_000:.2f}K"
-
-    return f"${value:,.2f}"
-
-
-def fmt_pct(value):
-    value = clean_number(value)
-
-    if value is None:
-        return "—"
-
-    return f"{value:+.2f}%"
-
-
-def fmt_date(value):
-    if value is None:
-        return "—"
-
-    try:
-        if isinstance(value, pd.Timestamp):
-            value = value.to_pydatetime()
-
-        if isinstance(value, datetime):
-            return value.strftime("%b %d, %Y")
-
-        if isinstance(value, date):
-            return value.strftime("%b %d, %Y")
-
-        parsed = pd.to_datetime(value, errors="coerce")
-
-        if pd.isna(parsed):
-            return "—"
-
-        return parsed.strftime("%b %d, %Y")
-
-    except Exception:
-        return "—"
-
-
-def safe_text(value):
-    if value is None:
-        return "—"
-
     try:
         if pd.isna(value):
             return "—"
     except Exception:
         pass
+    value = str(value).strip()
+    if not value or value.lower() in {"none", "nan", "n/a", "null", "nat"}:
+        return "—"
+    return value
 
-    text = str(value).strip()
 
-    if not text or text.lower() in {
-        "nan",
-        "none",
-        "n/a",
-        "null",
-        "nat",
-    }:
+def money(value, decimals=2):
+    value = number(value)
+    return "—" if value is None else f"${value:,.{decimals}f}"
+
+
+def plain_number(value, decimals=2):
+    value = number(value)
+    return "—" if value is None else f"{value:,.{decimals}f}"
+
+
+def integer(value):
+    value = number(value)
+    return "—" if value is None else f"{int(value):,}"
+
+
+def large_money(value):
+    value = number(value)
+    if value is None:
+        return "—"
+    absolute = abs(value)
+    if absolute >= 1_000_000_000_000:
+        return f"${value / 1_000_000_000_000:.2f}T"
+    if absolute >= 1_000_000_000:
+        return f"${value / 1_000_000_000:.2f}B"
+    if absolute >= 1_000_000:
+        return f"${value / 1_000_000:.2f}M"
+    if absolute >= 1_000:
+        return f"${value / 1_000:.2f}K"
+    return f"${value:,.2f}"
+
+
+def percent(value):
+    value = number(value)
+    return "—" if value is None else f"{value:+.2f}%"
+
+
+def fmt_date(value):
+    if value is None:
+        return "—"
+    try:
+        parsed = pd.to_datetime(value, errors="coerce")
+        if pd.isna(parsed):
+            return "—"
+        return parsed.strftime("%b %d, %Y")
+    except Exception:
         return "—"
 
-    return text
 
-
-def get_info_value(info, *keys):
+def info_value(info, *keys):
     if not isinstance(info, dict):
         return None
-
     for key in keys:
         value = info.get(key)
-
         if value is not None:
             try:
                 if pd.isna(value):
                     continue
             except Exception:
                 pass
-
             return value
-
     return None
 
 
-def safe_history(ticker, period="5d", interval="1d"):
+# ============================================================
+# DATA HELPERS
+# ============================================================
+
+def get_history(ticker, period="5d"):
     try:
-        df = ticker.history(
+        frame = ticker.history(
             period=period,
-            interval=interval,
+            interval="1d",
             auto_adjust=False,
             actions=False,
         )
-
-        if df is None or df.empty:
+        if frame is None or frame.empty:
             return None
-
-        df = df.copy()
-
         required = {"Open", "High", "Low", "Close"}
-
-        if not required.issubset(df.columns):
+        if not required.issubset(frame.columns):
             return None
-
-        df = df.dropna(subset=["Close"])
-
-        if df.empty:
-            return None
-
-        return df
-
+        return frame.dropna(subset=["Close"])
     except Exception:
         return None
 
-
-def extract_date_from_value(value):
-    """Try to extract a date from various Yahoo/yfinance formats."""
-    if value is None:
-        return None
-
-    try:
-        if isinstance(value, pd.Timestamp):
-            return value.to_pydatetime()
-
-        if isinstance(value, datetime):
-            return value
-
-        if isinstance(value, date):
-            return datetime.combine(value, datetime.min.time())
-
-        parsed = pd.to_datetime(value, errors="coerce")
-
-        if pd.isna(parsed):
-            return None
-
-        if isinstance(parsed, pd.Timestamp):
-            return parsed.to_pydatetime()
-
-        return parsed
-
-    except Exception:
-        return None
-
-
-# ============================================================
-# EARNINGS DATE
-# ============================================================
 
 def get_earnings_date(ticker):
-    """
-    Prefer the next future earnings date.
-    If unavailable, use the latest known earnings date.
-    """
-
     try:
-        earnings = ticker.get_earnings_dates(limit=12)
-
-        if earnings is not None and not earnings.empty:
-            index = earnings.index
-
+        frame = ticker.get_earnings_dates(limit=12)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
             dates = []
-
-            for item in index:
-                parsed = extract_date_from_value(item)
-
-                if parsed is not None:
-                    dates.append(parsed)
-
+            for value in frame.index:
+                parsed = pd.to_datetime(value, errors="coerce")
+                if not pd.isna(parsed):
+                    dates.append(parsed.to_pydatetime())
             if dates:
                 now = datetime.now()
-
-                future_dates = [
-                    d for d in dates
-                    if d >= now
-                ]
-
-                if future_dates:
-                    return min(future_dates)
-
-                return max(dates)
-
+                future = [d for d in dates if d >= now]
+                return min(future) if future else max(dates)
     except Exception:
         pass
 
-    # Fallback to calendar
     try:
         calendar = ticker.get_calendar()
-
         if isinstance(calendar, dict):
-            for key in [
-                "Earnings Date",
-                "earningsDate",
-                "Earnings Dates",
-            ]:
-                value = calendar.get(key)
-
-                if value is None:
-                    continue
-
-                if isinstance(value, (list, tuple)):
-                    dates = []
-
-                    for item in value:
-                        parsed = extract_date_from_value(item)
-
-                        if parsed:
-                            dates.append(parsed)
-
-                    if dates:
-                        return min(dates)
-
-                parsed = extract_date_from_value(value)
-
-                if parsed:
-                    return parsed
-
-        elif isinstance(calendar, pd.DataFrame):
-            for column in calendar.columns:
-                if "earn" in str(column).lower():
-                    for value in calendar[column].tolist():
-                        parsed = extract_date_from_value(value)
-
-                        if parsed:
-                            return parsed
-
-            for index in calendar.index:
-                if "earn" in str(index).lower():
-                    values = calendar.loc[index]
-
-                    if isinstance(values, pd.Series):
-                        for value in values.tolist():
-                            parsed = extract_date_from_value(value)
-
-                            if parsed:
-                                return parsed
-
+            value = calendar.get("Earnings Date")
+            if isinstance(value, (list, tuple)):
+                dates = []
+                for item in value:
+                    parsed = pd.to_datetime(item, errors="coerce")
+                    if not pd.isna(parsed):
+                        dates.append(parsed)
+                if dates:
+                    return min(dates)
+            parsed = pd.to_datetime(value, errors="coerce")
+            if not pd.isna(parsed):
+                return parsed
     except Exception:
         pass
 
     return None
 
 
-# ============================================================
-# HOLDER DATA
-# ============================================================
-
-def parse_major_holders(holders):
-    """
-    yfinance's major_holders DataFrame can change orientation.
-    Convert it into a simple dictionary without assuming one layout.
-    """
-
+def parse_major_holders(frame):
     result = {}
-
-    if holders is None:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
         return result
 
-    if isinstance(holders, pd.Series):
-        holders = holders.to_frame()
-
-    if not isinstance(holders, pd.DataFrame):
-        return result
-
-    if holders.empty:
-        return result
-
-    # Typical format:
-    #
-    #                    Value
-    #  0.01%    % of Shares Held by All Insider
-    #  0.65%    % of Shares Held by Institutions
-    #
-    for _, row in holders.iterrows():
-
+    for _, row in frame.iterrows():
         values = row.tolist()
-
         if len(values) < 2:
             continue
 
-        value_a = values[0]
-        value_b = values[-1]
+        label = None
+        value = None
 
-        text = None
-        metric = None
+        if isinstance(values[0], str):
+            label, value = values[0], values[-1]
+        elif isinstance(values[-1], str):
+            label, value = values[-1], values[0]
 
-        if isinstance(value_a, str):
-            text = value_a
-            metric = value_b
-
-        elif isinstance(value_b, str):
-            text = value_b
-            metric = value_a
-
-        if text is None:
+        if not label:
             continue
 
-        text_lower = text.lower()
+        key = label.lower()
 
-        if "insider" in text_lower:
-            result["insider"] = metric
-
-        elif "institution" in text_lower:
-            result["institution"] = metric
-
-        elif "float" in text_lower:
-            result["float"] = metric
+        if "insider" in key:
+            result["insider"] = value
+        elif "institution" in key:
+            result["institution"] = value
+        elif "float" in key:
+            result["float"] = value
 
     return result
 
 
+def load_holders(ticker):
+    major = None
+    institutions = None
+    errors = []
+
+    try:
+        major = ticker.get_major_holders()
+    except Exception as exc:
+        errors.append(f"Major holders unavailable: {type(exc).__name__}")
+
+    try:
+        institutions = ticker.get_institutional_holders()
+    except Exception as exc:
+        errors.append(f"Institutional holders unavailable: {type(exc).__name__}")
+
+    return major, institutions, errors
+
+
 # ============================================================
-# LOAD STOCK DATA
+# STOCK LOADER
 # ============================================================
 
-@st.cache_data(
-    ttl=86400,
-    max_entries=250,
-    show_spinner=False,
-)
-def load_stock(symbol, refresh_day):
-    """
-    Load stock data.
-
-    refresh_day is intentionally passed into the cache key so the
-    cache naturally refreshes once per calendar day.
-    """
-
-    symbol = symbol.upper().strip()
-
+@st.cache_data(ttl=86400, max_entries=250, show_spinner=False)
+def load_stock(symbol, cache_day):
+    symbol = symbol.strip().upper()
     ticker = yf.Ticker(symbol)
 
     errors = []
 
-    # --------------------------------------------------------
-    # HISTORY
-    # --------------------------------------------------------
-
-    history_5d = safe_history(
-        ticker,
-        period="5d",
-        interval="1d",
-    )
-
-    history_1y = None
-
-    if history_5d is None or history_5d.empty:
-        history_1y = safe_history(
-            ticker,
-            period="1y",
-            interval="1d",
-        )
-
-    # --------------------------------------------------------
-    # INFO
-    # --------------------------------------------------------
-
+    # Fast/quote information.
     info = {}
-
     try:
         info = ticker.get_info()
-
         if not isinstance(info, dict):
             info = {}
-
     except Exception as exc:
-        errors.append(
-            f"Company/fundamental data request failed: {type(exc).__name__}"
-        )
+        errors.append(f"Yahoo fundamentals unavailable: {type(exc).__name__}")
 
-    # --------------------------------------------------------
-    # FAST INFO
-    # --------------------------------------------------------
-
-    fast_info = {}
-
+    fast = {}
     try:
-        fast_info = dict(ticker.fast_info)
-
+        fast = dict(ticker.fast_info)
     except Exception:
-        fast_info = {}
+        fast = {}
 
-    # --------------------------------------------------------
-    # PRICE
-    # --------------------------------------------------------
+    # Daily history.
+    history = get_history(ticker, "5d")
+    if history is None:
+        history = get_history(ticker, "1y")
 
+    # Current quote.
     current_price = first_valid(
-        get_info_value(
-            info,
-            "currentPrice",
-            "regularMarketPrice",
-        ),
-        fast_info.get("last_price"),
-    )
-
-    # --------------------------------------------------------
-    # OHLC
-    # --------------------------------------------------------
-
-    open_price = None
-    high_price = None
-    low_price = None
-    previous_close = None
-
-    if history_5d is not None and not history_5d.empty:
-
-        latest = history_5d.iloc[-1]
-
-        open_price = clean_number(latest.get("Open"))
-        high_price = clean_number(latest.get("High"))
-        low_price = clean_number(latest.get("Low"))
-
-        if len(history_5d) >= 2:
-            previous_close = clean_number(
-                history_5d.iloc[-2].get("Close")
-            )
-
-    # Use Yahoo quote values if available.
-    open_price = first_valid(
-        get_info_value(info, "open"),
-        open_price,
-        fast_info.get("open"),
-    )
-
-    high_price = first_valid(
-        get_info_value(info, "dayHigh"),
-        high_price,
-        fast_info.get("day_high"),
-    )
-
-    low_price = first_valid(
-        get_info_value(info, "dayLow"),
-        low_price,
-        fast_info.get("day_low"),
+        info_value(info, "currentPrice", "regularMarketPrice"),
+        fast.get("last_price"),
     )
 
     previous_close = first_valid(
-        get_info_value(
-            info,
-            "previousClose",
-            "regularMarketPreviousClose",
-        ),
-        previous_close,
-        fast_info.get("previous_close"),
+        info_value(info, "previousClose", "regularMarketPreviousClose"),
+        fast.get("previous_close"),
     )
 
-    # --------------------------------------------------------
-    # CURRENT PRICE FALLBACK
-    # --------------------------------------------------------
-
-    if current_price is None:
-
-        if history_5d is not None and not history_5d.empty:
-            current_price = clean_number(
-                history_5d.iloc[-1]["Close"]
-            )
-
-        elif history_1y is not None and not history_1y.empty:
-            current_price = clean_number(
-                history_1y.iloc[-1]["Close"]
-            )
-
-    # --------------------------------------------------------
-    # DAILY CHANGE
-    # --------------------------------------------------------
-
-    change = None
-    change_percent = None
-
-    if current_price is not None and previous_close:
-        change = current_price - previous_close
-        change_percent = (
-            change / previous_close
-        ) * 100
-
-    # --------------------------------------------------------
-    # PE
-    # --------------------------------------------------------
-
-    pe_ratio = first_valid(
-        get_info_value(
-            info,
-            "trailingPE",
-        ),
-        get_info_value(
-            info,
-            "forwardPE",
-        ),
+    open_price = first_valid(
+        info_value(info, "open", "regularMarketOpen"),
+        fast.get("open"),
     )
 
-    # --------------------------------------------------------
-    # EPS
-    # --------------------------------------------------------
+    day_high = first_valid(
+        info_value(info, "dayHigh", "regularMarketDayHigh"),
+        fast.get("day_high"),
+    )
+
+    day_low = first_valid(
+        info_value(info, "dayLow", "regularMarketDayLow"),
+        fast.get("day_low"),
+    )
+
+    # Historical fallback.
+    if history is not None and not history.empty:
+        latest = history.iloc[-1]
+
+        open_price = first_valid(
+            open_price,
+            number(latest.get("Open")),
+        )
+
+        day_high = first_valid(
+            day_high,
+            number(latest.get("High")),
+        )
+
+        day_low = first_valid(
+            day_low,
+            number(latest.get("Low")),
+        )
+
+        if previous_close is None and len(history) >= 2:
+            previous_close = number(history.iloc[-2].get("Close"))
+
+        if current_price is None:
+            current_price = number(latest.get("Close"))
+
+    # Fundamentals.
+    pe = first_valid(
+        info_value(info, "trailingPE"),
+        info_value(info, "forwardPE"),
+    )
 
     eps = first_valid(
-        get_info_value(
-            info,
-            "trailingEps",
-        ),
-        get_info_value(
-            info,
-            "forwardEps",
-        ),
+        info_value(info, "trailingEps"),
+        info_value(info, "forwardEps"),
     )
 
-    # --------------------------------------------------------
-    # 52 WEEK HIGH / LOW
-    # --------------------------------------------------------
+    week_high = info_value(info, "fiftyTwoWeekHigh")
+    week_low = info_value(info, "fiftyTwoWeekLow")
 
-    week_52_high = get_info_value(
-        info,
-        "fiftyTwoWeekHigh",
-    )
-
-    week_52_low = get_info_value(
-        info,
-        "fiftyTwoWeekLow",
-    )
-
-    # Fallback to 1-year history if Yahoo's quote fields
-    # don't provide these values.
-
-    if (
-        week_52_high is None
-        or week_52_low is None
-    ):
-
-        if history_1y is None:
-            history_1y = safe_history(
-                ticker,
-                period="1y",
-                interval="1d",
-            )
-
-        if history_1y is not None and not history_1y.empty:
-
-            if week_52_high is None:
+    # 52-week fallback from history.
+    if week_high is None or week_low is None:
+        year_history = get_history(ticker, "1y")
+        if year_history is not None and not year_history.empty:
+            if week_high is None:
                 try:
-                    week_52_high = history_1y[
-                        "High"
-                    ].max()
+                    week_high = year_history["High"].max()
+                except Exception:
+                    pass
+            if week_low is None:
+                try:
+                    week_low = year_history["Low"].min()
                 except Exception:
                     pass
 
-            if week_52_low is None:
-                try:
-                    week_52_low = history_1y[
-                        "Low"
-                    ].min()
-                except Exception:
-                    pass
+    change = None
+    change_pct = None
 
-    # --------------------------------------------------------
-    # EARNINGS
-    # --------------------------------------------------------
+    if current_price is not None and previous_close not in (None, 0):
+        change = current_price - previous_close
+        change_pct = change / previous_close * 100
 
-    earnings_date = get_earnings_date(ticker)
+    major, institutions, holder_errors = load_holders(ticker)
+    errors.extend(holder_errors)
 
-    # --------------------------------------------------------
-    # COMPANY DETAILS
-    # --------------------------------------------------------
+    company_name = info_value(info, "longName", "shortName")
 
-    company_name = safe_text(
-        get_info_value(
-            info,
-            "longName",
-            "shortName",
-        )
-    )
-
-    sector = safe_text(
-        get_info_value(
-            info,
-            "sector",
-        )
-    )
-
-    industry = safe_text(
-        get_info_value(
-            info,
-            "industry",
-        )
-    )
-
-    country = safe_text(
-        get_info_value(
-            info,
-            "country",
-        )
-    )
-
-    website = safe_text(
-        get_info_value(
-            info,
-            "website",
-        )
-    )
-
-    employees = get_info_value(
-        info,
-        "fullTimeEmployees",
-    )
-
-    currency = safe_text(
-        get_info_value(
-            info,
-            "currency",
-        )
-    )
-
-    exchange = safe_text(
-        get_info_value(
-            info,
-            "exchange",
-            "fullExchangeName",
-        )
-    )
-
-    market_cap = get_info_value(
-        info,
-        "marketCap",
-    )
-
-    business_summary = safe_text(
-        get_info_value(
-            info,
-            "longBusinessSummary",
-        )
-    )
-
-    # --------------------------------------------------------
-    # MAJOR HOLDERS
-    # --------------------------------------------------------
-
-    major_holders = None
-
-    try:
-        major_holders = ticker.get_major_holders()
-
-    except Exception as exc:
-        errors.append(
-            f"Major holders request failed: {type(exc).__name__}"
-        )
-
-    holder_data = parse_major_holders(
-        major_holders
-    )
-
-    # --------------------------------------------------------
-    # INSTITUTIONAL HOLDERS
-    # --------------------------------------------------------
-
-    institutional_holders = None
-
-    try:
-        institutional_holders = (
-            ticker.get_institutional_holders()
-        )
-
-    except Exception as exc:
-        errors.append(
-            f"Institutional holders request failed: "
-            f"{type(exc).__name__}"
-        )
-
-    institutional_count = None
-
-    if (
-        isinstance(
-            institutional_holders,
-            pd.DataFrame,
-        )
-        and not institutional_holders.empty
-    ):
-        institutional_count = len(
-            institutional_holders
-        )
-
-    # --------------------------------------------------------
-    # VALIDATION
-    # --------------------------------------------------------
-
-    usable_data = (
-        current_price is not None
-        or company_name != "—"
-        or (
-            history_5d is not None
-            and not history_5d.empty
-        )
+    usable = any(
+        value is not None
+        for value in [
+            current_price,
+            company_name,
+            open_price,
+            day_high,
+            day_low,
+        ]
     )
 
     return {
         "symbol": symbol,
-        "current_price": current_price,
-        "previous_close": previous_close,
-        "open": open_price,
-        "high": high_price,
-        "low": low_price,
-        "change": change,
-        "change_percent": change_percent,
-        "pe_ratio": pe_ratio,
-        "eps": eps,
-        "earnings_date": earnings_date,
-        "week_52_high": week_52_high,
-        "week_52_low": week_52_low,
-        "company_name": company_name,
-        "sector": sector,
-        "industry": industry,
-        "country": country,
-        "website": website,
-        "employees": employees,
-        "currency": currency,
-        "exchange": exchange,
-        "market_cap": market_cap,
-        "business_summary": business_summary,
-        "major_holders": holder_data,
-        "institutional_holders": institutional_holders,
-        "institutional_count": institutional_count,
-        "usable_data": usable_data,
+        "price": number(current_price),
+        "previous_close": number(previous_close),
+        "open": number(open_price),
+        "high": number(day_high),
+        "low": number(day_low),
+        "change": number(change),
+        "change_pct": number(change_pct),
+        "pe": number(pe),
+        "eps": number(eps),
+        "week_high": number(week_high),
+        "week_low": number(week_low),
+        "earnings_date": get_earnings_date(ticker),
+        "company_name": text(company_name),
+        "sector": text(info_value(info, "sector")),
+        "industry": text(info_value(info, "industry")),
+        "country": text(info_value(info, "country")),
+        "website": text(info_value(info, "website")),
+        "employees": info_value(info, "fullTimeEmployees"),
+        "currency": text(info_value(info, "currency")),
+        "exchange": text(info_value(info, "fullExchangeName", "exchange")),
+        "market_cap": number(info_value(info, "marketCap")),
+        "summary": text(info_value(info, "longBusinessSummary")),
+        "major_holders": parse_major_holders(major),
+        "institutional": institutions,
         "errors": errors,
+        "usable": usable,
         "loaded_at": datetime.now(),
     }
 
 
 # ============================================================
-# METRIC CARD
+# UI HELPERS
 # ============================================================
 
 def metric_card(label, value):
-    st.markdown(
-        f"""
-        <div class="metric-card">
-            <div class="metric-label">{label}</div>
-            <div class="metric-value">{value}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    # IMPORTANT: no indentation inside this HTML.
+    html = (
+        '<div class="metric">'
+        f'<div class="metric-label">{label}</div>'
+        f'<div class="metric-value">{value}</div>'
+        '</div>'
     )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # ============================================================
@@ -1086,75 +532,39 @@ def metric_card(label, value):
 # ============================================================
 
 with st.sidebar:
-
-    st.markdown(
-        """
-        <div style="
-            font-size: 1.5rem;
-            font-weight: 850;
-            margin-bottom: 4px;
-        ">
-            📈 Stock Dashboard
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.caption(
-        "Clean market data, fundamentals and favorites."
-    )
+    st.markdown("## 📈 Stock Dashboard")
+    st.caption("Market data, fundamentals and favorites.")
 
     st.divider()
 
-    ticker_input = st.text_input(
-        "Stock Symbol",
+    symbol_input = st.text_input(
+        "Stock symbol",
         value=st.session_state.selected_symbol,
         placeholder="AAPL",
-        help="Enter a stock ticker such as AAPL, MSFT, NVDA or TSLA.",
-    ).upper().strip()
+    ).strip().upper()
 
     if st.button(
         "Load Stock",
         type="primary",
         use_container_width=True,
     ):
-        if ticker_input:
-
-            st.session_state.selected_symbol = (
-                ticker_input
-            )
-
-            st.session_state.last_loaded = (
-                datetime.now()
-            )
-
+        if symbol_input:
+            st.session_state.selected_symbol = symbol_input
             st.rerun()
 
     st.markdown("### Favorites")
 
     if st.session_state.favorites:
-
         for favorite in st.session_state.favorites:
-
             if st.button(
                 f"★ {favorite}",
                 key=f"favorite_{favorite}",
                 use_container_width=True,
             ):
-                st.session_state.selected_symbol = (
-                    favorite
-                )
-
-                st.session_state.last_loaded = (
-                    datetime.now()
-                )
-
+                st.session_state.selected_symbol = favorite
                 st.rerun()
-
     else:
-        st.caption(
-            "No favorite stocks yet."
-        )
+        st.caption("No favorites yet.")
 
     st.divider()
 
@@ -1162,200 +572,103 @@ with st.sidebar:
         "↻ Refresh Data",
         use_container_width=True,
     ):
-
         st.cache_data.clear()
-
-        st.session_state.last_loaded = (
-            datetime.now()
-        )
-
         st.rerun()
 
-    st.caption(
-        "Data cache refreshes automatically every 24 hours."
-    )
+    st.caption("Data cache refreshes once per day, or immediately with Refresh Data.")
 
     st.divider()
 
-    st.markdown(
-        """
-        <div class="small-muted">
-        Data source: Yahoo Finance through yfinance.<br><br>
-        Market data can be delayed and may be unavailable
-        during provider outages or rate limits.
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.caption(
+        "Source: Yahoo Finance via yfinance. "
+        "Free market data can be delayed or temporarily unavailable."
     )
 
 
 # ============================================================
-# LOAD SELECTED STOCK
+# MAIN
 # ============================================================
 
-symbol = (
-    st.session_state.selected_symbol
-    .upper()
-    .strip()
-)
-
-if not symbol:
-    symbol = "AAPL"
-
-today = date.today().isoformat()
-
-with st.spinner(
-    f"Loading {symbol} market data..."
-):
-
-    data = load_stock(
-        symbol,
-        today,
-    )
-
-
-# ============================================================
-# ERROR HANDLING
-# ============================================================
-
-if not data["usable_data"]:
-
-    st.markdown(
-        f"""
-        <div class="error-box">
-            <strong>Could not load {symbol}.</strong><br><br>
-            Yahoo Finance did not return usable market data.
-            This dashboard will not invent numbers just to make
-            the interface look pretty.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    if data["errors"]:
-
-        st.write("Technical notices:")
-
-        for error in data["errors"]:
-            st.caption(error)
-
-    st.stop()
-
-
-# ============================================================
-# HEADER
-# ============================================================
-
-company_name = data["company_name"]
-
-price = data["current_price"]
-
-change = data["change"]
-
-change_percent = data["change_percent"]
-
-
-if change_percent is not None:
-
-    if change_percent > 0:
-
-        change_class = "positive"
-
-    elif change_percent < 0:
-
-        change_class = "negative"
-
-    else:
-
-        change_class = "neutral"
-
-else:
-
-    change_class = "neutral"
-
-
-change_text = (
-    f"{fmt_num(change, 2)} "
-    f"({fmt_pct(change_percent)})"
-)
-
+symbol = st.session_state.selected_symbol.upper().strip() or "AAPL"
 
 st.markdown(
-    '<div class="main-title">AI Stock Dashboard</div>',
+    '<h1 style="margin-bottom:0;">AI Stock Dashboard</h1>',
     unsafe_allow_html=True,
 )
-
 st.markdown(
-    '<div class="subtitle">'
+    '<div style="color:#6b7280;margin-bottom:1.2rem;">'
     'Market overview, fundamentals and company information'
     '</div>',
     unsafe_allow_html=True,
 )
 
+with st.spinner(f"Loading {symbol}..."):
+    data = load_stock(symbol, date.today().isoformat())
 
-st.markdown(
-    f"""
-    <div class="stock-header">
-        <div class="ticker">{symbol}</div>
-        <div class="company-name">{company_name}</div>
-
-        <div class="price">
-            {fmt_num(price, 2)}
-        </div>
-
-        <div class="{change_class}">
-            {change_text}
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+if not data["usable"]:
+    st.error(
+        f"Could not load usable data for {symbol}. "
+        "Yahoo Finance may be rate-limiting or temporarily unavailable."
+    )
+    for error in data["errors"]:
+        st.caption(error)
+    st.stop()
 
 
 # ============================================================
-# FAVORITE BUTTON
+# HERO
 # ============================================================
 
-is_favorite = (
-    symbol in st.session_state.favorites
+price = data["price"]
+change_pct = data["change_pct"]
+
+if change_pct is not None and change_pct > 0:
+    change_class = "hero-change-up"
+elif change_pct is not None and change_pct < 0:
+    change_class = "hero-change-down"
+else:
+    change_class = "hero-change-flat"
+
+change_line = (
+    f'{money(data["change"])} ({percent(change_pct)})'
+    if data["change"] is not None
+    else "—"
 )
 
-favorite_col1, favorite_col2, _ = st.columns(
-    [1.2, 1.2, 5]
+hero_html = (
+    '<div class="hero">'
+    f'<div class="hero-symbol">{symbol}</div>'
+    f'<div class="hero-name">{data["company_name"]}</div>'
+    f'<div class="hero-price">{money(price)}</div>'
+    f'<div class="{change_class}">{change_line}</div>'
+    '</div>'
 )
 
-with favorite_col1:
+st.markdown(hero_html, unsafe_allow_html=True)
 
-    if not is_favorite:
 
-        if st.button(
-            "☆ Add Favorite",
-            type="primary",
-            use_container_width=True,
-        ):
+# ============================================================
+# FAVORITE
+# ============================================================
 
-            if symbol not in st.session_state.favorites:
+is_favorite = symbol in st.session_state.favorites
 
-                st.session_state.favorites.append(
-                    symbol
-                )
-
-            st.rerun()
-
-    else:
-
-        if st.button(
-            "★ Remove Favorite",
-            use_container_width=True,
-        ):
-
-            st.session_state.favorites = [
-                x
-                for x in st.session_state.favorites
-                if x != symbol
-            ]
-
-            st.rerun()
+if is_favorite:
+    if st.button(
+        "★ Remove Favorite",
+        use_container_width=True,
+    ):
+        st.session_state.favorites.remove(symbol)
+        st.rerun()
+else:
+    if st.button(
+        "☆ Add Favorite",
+        type="primary",
+        use_container_width=True,
+    ):
+        if symbol not in st.session_state.favorites:
+            st.session_state.favorites.append(symbol)
+        st.rerun()
 
 
 # ============================================================
@@ -1363,128 +676,66 @@ with favorite_col1:
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">'
-    'Market Snapshot'
-    '</div>',
+    '<div class="section-heading">Market Snapshot</div>',
     unsafe_allow_html=True,
 )
 
-snapshot_cols = st.columns(4)
+cols = st.columns(4)
 
-with snapshot_cols[0]:
-    metric_card(
-        "Previous Close",
-        fmt_num(
-            data["previous_close"],
-            2,
-        ),
-    )
+with cols[0]:
+    metric_card("Previous Close", money(data["previous_close"]))
 
-with snapshot_cols[1]:
-    metric_card(
-        "Open",
-        fmt_num(
-            data["open"],
-            2,
-        ),
-    )
+with cols[1]:
+    metric_card("Open", money(data["open"]))
 
-with snapshot_cols[2]:
-    metric_card(
-        "Day High",
-        fmt_num(
-            data["high"],
-            2,
-        ),
-    )
+with cols[2]:
+    metric_card("Day High", money(data["high"]))
 
-with snapshot_cols[3]:
-    metric_card(
-        "Day Low",
-        fmt_num(
-            data["low"],
-            2,
-        ),
-    )
+with cols[3]:
+    metric_card("Day Low", money(data["low"]))
 
+cols = st.columns(4)
 
-snapshot_cols_2 = st.columns(4)
+with cols[0]:
+    metric_card("P/E Ratio", plain_number(data["pe"]))
 
-with snapshot_cols_2[0]:
-    metric_card(
-        "P/E Ratio",
-        fmt_num(
-            data["pe_ratio"],
-            2,
-        ),
-    )
+with cols[1]:
+    metric_card("EPS", money(data["eps"]))
 
-with snapshot_cols_2[1]:
-    metric_card(
-        "EPS",
-        fmt_num(
-            data["eps"],
-            2,
-        ),
-    )
+with cols[2]:
+    metric_card("52 Week High", money(data["week_high"]))
 
-with snapshot_cols_2[2]:
-    metric_card(
-        "52 Week High",
-        fmt_num(
-            data["week_52_high"],
-            2,
-        ),
-    )
-
-with snapshot_cols_2[3]:
-    metric_card(
-        "52 Week Low",
-        fmt_num(
-            data["week_52_low"],
-            2,
-        ),
-    )
+with cols[3]:
+    metric_card("52 Week Low", money(data["week_low"]))
 
 
 # ============================================================
-# EARNINGS
+# EARNINGS / MARKET CAP
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">'
-    'Earnings'
-    '</div>',
+    '<div class="section-heading">Key Information</div>',
     unsafe_allow_html=True,
 )
 
-earn_cols = st.columns(3)
+cols = st.columns(3)
 
-with earn_cols[0]:
-
+with cols[0]:
     metric_card(
-        "Next / Latest Earnings Date",
-        fmt_date(
-            data["earnings_date"]
-        ),
+        "Earnings Date",
+        fmt_date(data["earnings_date"]),
     )
 
-with earn_cols[1]:
-
+with cols[1]:
     metric_card(
         "Market Cap",
-        fmt_large_number(
-            data["market_cap"]
-        ),
+        large_money(data["market_cap"]),
     )
 
-with earn_cols[2]:
-
+with cols[2]:
     metric_card(
         "Exchange",
-        safe_text(
-            data["exchange"]
-        ),
+        data["exchange"],
     )
 
 
@@ -1493,142 +744,55 @@ with earn_cols[2]:
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">'
-    'Company Details'
-    '</div>',
+    '<div class="section-heading">Company Details</div>',
     unsafe_allow_html=True,
 )
 
-details_left, details_right = st.columns(2)
+left, right = st.columns(2)
 
-with details_left:
+with left:
+    with st.container(border=True):
+        st.write("**Company Name**")
+        st.write(data["company_name"])
 
-    st.markdown(
-        '<div class="info-card">',
-        unsafe_allow_html=True,
-    )
+        st.write("**Sector**")
+        st.write(data["sector"])
 
-    rows = [
-        (
-            "Company Name",
-            data["company_name"],
-        ),
-        (
-            "Sector",
-            data["sector"],
-        ),
-        (
-            "Industry",
-            data["industry"],
-        ),
-        (
-            "Country",
-            data["country"],
-        ),
-    ]
+        st.write("**Industry**")
+        st.write(data["industry"])
 
-    for label, value in rows:
+        st.write("**Country**")
+        st.write(data["country"])
 
-        st.markdown(
-            f"""
-            <div class="info-row">
-                <div class="info-label">
-                    {label}
-                </div>
+with right:
+    with st.container(border=True):
+        st.write("**Employees**")
+        st.write(integer(data["employees"]))
 
-                <div class="info-value">
-                    {safe_text(value)}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.write("**Currency**")
+        st.write(data["currency"])
 
-    st.markdown(
-        '</div>',
-        unsafe_allow_html=True,
-    )
+        st.write("**Exchange**")
+        st.write(data["exchange"])
 
-
-with details_right:
-
-    st.markdown(
-        '<div class="info-card">',
-        unsafe_allow_html=True,
-    )
-
-    website = data["website"]
-
-    if website != "—":
-
-        website_display = (
-            f'<a href="{website}" '
-            'target="_blank">'
-            f'{website}'
-            '</a>'
-        )
-
-    else:
-
-        website_display = "—"
-
-    rows = [
-        (
-            "Website",
-            website_display,
-        ),
-        (
-            "Employees",
-            fmt_integer(
-                data["employees"]
-            ),
-        ),
-        (
-            "Currency",
-            data["currency"],
-        ),
-        (
-            "Exchange",
-            data["exchange"],
-        ),
-    ]
-
-    for label, value in rows:
-
-        st.markdown(
-            f"""
-            <div class="info-row">
-                <div class="info-label">
-                    {label}
-                </div>
-
-                <div class="info-value">
-                    {value}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    st.markdown(
-        '</div>',
-        unsafe_allow_html=True,
-    )
+        if data["website"] != "—":
+            st.link_button(
+                "Open Company Website",
+                data["website"],
+                use_container_width=True,
+            )
+        else:
+            st.write("**Website**")
+            st.write("—")
 
 
 # ============================================================
 # BUSINESS DESCRIPTION
 # ============================================================
 
-if data["business_summary"] != "—":
-
-    with st.expander(
-        "Business Description"
-    ):
-
-        st.write(
-            data["business_summary"]
-        )
+if data["summary"] != "—":
+    with st.expander("Business Description"):
+        st.write(data["summary"])
 
 
 # ============================================================
@@ -1636,77 +800,46 @@ if data["business_summary"] != "—":
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">'
-    'Major Holders Breakdown'
-    '</div>',
+    '<div class="section-heading">Major Holders Breakdown</div>',
     unsafe_allow_html=True,
 )
 
 holders = data["major_holders"]
 
-holder_cols = st.columns(3)
+cols = st.columns(3)
 
-with holder_cols[0]:
-
-    insider = holders.get(
-        "insider"
-    )
-
+with cols[0]:
     metric_card(
         "Insider Ownership",
-        safe_text(insider),
+        text(holders.get("insider")),
     )
 
-with holder_cols[1]:
-
-    institution = holders.get(
-        "institution"
-    )
-
+with cols[1]:
     metric_card(
         "Institutional Ownership",
-        safe_text(institution),
+        text(holders.get("institution")),
     )
 
-with holder_cols[2]:
-
-    float_value = holders.get(
-        "float"
-    )
-
+with cols[2]:
     metric_card(
         "Float",
-        safe_text(float_value),
+        text(holders.get("float")),
     )
 
 
 # ============================================================
-# INSTITUTIONAL HOLDERS
+# INSTITUTIONAL HOLDERS TABLE
 # ============================================================
 
-institutional_df = data[
-    "institutional_holders"
-]
+institutional = data["institutional"]
 
-if (
-    isinstance(
-        institutional_df,
-        pd.DataFrame,
-    )
-    and not institutional_df.empty
-):
-
+if isinstance(institutional, pd.DataFrame) and not institutional.empty:
     st.markdown(
-        '<div class="section-title">'
-        'Institutional Holders'
-        '</div>',
+        '<div class="section-heading">Institutional Holders</div>',
         unsafe_allow_html=True,
     )
 
-    display_df = institutional_df.copy()
-
-    # Limit display columns to useful ones.
-    preferred_columns = [
+    preferred = [
         "Holder",
         "Shares",
         "Date Reported",
@@ -1714,83 +847,46 @@ if (
         "Value",
     ]
 
-    available_columns = [
+    columns = [
         column
-        for column in preferred_columns
-        if column in display_df.columns
+        for column in preferred
+        if column in institutional.columns
     ]
 
-    if available_columns:
-
-        display_df = display_df[
-            available_columns
-        ]
+    display = institutional[columns] if columns else institutional
 
     st.dataframe(
-        display_df,
+        display,
         use_container_width=True,
         hide_index=True,
     )
 
 
 # ============================================================
-# FAVORITES SECTION
+# FAVORITES
 # ============================================================
 
 st.markdown(
-    '<div class="section-title">'
-    'Favorites'
-    '</div>',
+    '<div class="section-heading">Favorites</div>',
     unsafe_allow_html=True,
 )
 
 if st.session_state.favorites:
-
-    favorite_cols = st.columns(
-        min(
-            len(
-                st.session_state.favorites
-            ),
-            4,
-        )
+    fav_cols = st.columns(
+        min(4, len(st.session_state.favorites))
     )
 
-    for index, favorite in enumerate(
-        st.session_state.favorites
-    ):
-
-        with favorite_cols[
-            index % len(favorite_cols)
-        ]:
-
-            if favorite == symbol:
-
-                favorite_label = (
-                    f"★ {favorite}"
-                )
-
-            else:
-
-                favorite_label = (
-                    f"☆ {favorite}"
-                )
-
-            st.markdown(
-                f"""
-                <div class="favorite-card">
-                    <strong>
-                        {favorite_label}
-                    </strong>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
+    for index, favorite in enumerate(st.session_state.favorites):
+        with fav_cols[index % len(fav_cols)]:
+            if st.button(
+                f"★ {favorite}",
+                key=f"main_favorite_{favorite}",
+                use_container_width=True,
+            ):
+                st.session_state.selected_symbol = favorite
+                st.rerun()
 else:
-
-    st.caption(
-        "Your favorite stocks will appear here."
-    )
+    st.caption("Your favorite stocks will appear here.")
 
 
 # ============================================================
@@ -1798,52 +894,24 @@ else:
 # ============================================================
 
 st.markdown(
-    '<div class="source-box">'
-    '<strong>Data integrity</strong><br>'
-    'This dashboard uses Yahoo Finance data through '
-    'yfinance. Missing values are displayed as '
-    '<strong>—</strong> rather than being fabricated. '
-    'Yahoo Finance data may be delayed, incomplete, '
-    'temporarily unavailable, or rate-limited.'
+    '<div class="notice">'
+    '<strong>Data integrity:</strong> Missing values are shown as '
+    '<strong>—</strong>. The app does not invent prices, EPS, P/E, '
+    'company information or earnings dates. Yahoo Finance data can '
+    'be delayed, incomplete, rate-limited or temporarily unavailable.'
     '</div>',
     unsafe_allow_html=True,
 )
 
-
-# ============================================================
-# NON-FATAL ERRORS
-# ============================================================
-
 if data["errors"]:
-
-    with st.expander(
-        "Non-fatal data-source notices"
-    ):
-
+    with st.expander("Non-fatal data-source notices"):
         for error in data["errors"]:
-
             st.warning(error)
 
-
-# ============================================================
-# LAST UPDATED
-# ============================================================
-
-loaded_at = data["loaded_at"]
-
 st.markdown(
-    f"""
-    <div style="
-        text-align: center;
-        color: #999;
-        font-size: 0.75rem;
-        margin-top: 28px;
-        padding-bottom: 20px;
-    ">
-        Data loaded: {loaded_at.strftime("%b %d, %Y at %I:%M:%S %p")}
-        <br>
-        Cache refresh interval: 24 hours
-    </div>
-    """,
+    '<div class="small-muted" style="text-align:center;margin-top:24px;">'
+    f'Loaded {data["loaded_at"].strftime("%b %d, %Y at %I:%M:%S %p")} '
+    '· Cache: 24 hours'
+    '</div>',
     unsafe_allow_html=True,
 )
