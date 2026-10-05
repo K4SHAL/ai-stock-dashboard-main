@@ -1,4 +1,5 @@
 import yfinance as yf
+import requests
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -86,11 +87,70 @@ def count_reported_institutional_holders(holders):
     """Count named holders present in Yahoo Finance's returned holder table."""
     if holders is None or not isinstance(holders, pd.DataFrame) or holders.empty:
         return None
+    reported_total = holders.attrs.get("reported_total_count")
+    if isinstance(reported_total, (int, np.integer)) and reported_total > 0:
+        return int(reported_total)
     if "Holder" not in holders.columns:
         return None
     names = holders["Holder"].dropna().astype(str).str.strip()
     names = names[names.ne("")]
     return int(names.nunique()) if not names.empty else None
+
+
+def _provider_number(value, percent=False):
+    if value is None:
+        return None
+    text = str(value).strip()
+    is_percent = text.endswith("%")
+    text = text.replace("$", "").replace(",", "").replace("%", "").strip()
+    try:
+        number = float(text)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number / 100 if percent and is_percent else number
+
+
+def fetch_nasdaq_institutional_holders(symbol):
+    """Fallback institutional ownership data from Nasdaq's public holdings feed."""
+    url = f"https://api.nasdaq.com/api/company/{symbol}/institutional-holdings"
+    params = {"limit": 100, "type": "TOTAL", "sortColumn": "marketValue", "sortOrder": "DESC"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; StockDashboard/1.0)",
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://www.nasdaq.com",
+        "Referer": "https://www.nasdaq.com/",
+    }
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("status", {}).get("rCode") != 200:
+            return None
+        data = payload.get("data") or {}
+        holdings_report = data.get("holdingsTransactions", {})
+        table = holdings_report.get("table", {})
+        source_rows = table.get("rows") or []
+        rows = []
+        for item in source_rows:
+            rows.append({
+                "Date Reported": pd.to_datetime(item.get("date"), errors="coerce"),
+                "Holder": item.get("ownerName"),
+                "Shares": _provider_number(item.get("sharesHeld")),
+                "Value": _provider_number(item.get("marketValue")),
+                "pctChange": _provider_number(item.get("sharesChangePCT"), percent=True),
+            })
+        holders = pd.DataFrame(rows)
+        if holders.empty:
+            return None
+        total_text = str(holdings_report.get("totalRecords", ""))
+        try:
+            holders.attrs["reported_total_count"] = int(total_text.replace(",", "").split()[0])
+        except (ValueError, IndexError):
+            pass
+        holders.attrs["data_source"] = "Nasdaq"
+        return holders
+    except (requests.RequestException, ValueError, TypeError):
+        return None
 
 
 def major_holder_value(holders, key):
@@ -333,6 +393,10 @@ class StockAnalyzer:
                 except Exception:
                     institutional_holders = None
             if institutional_holders is None or institutional_holders.empty:
+                institutional_holders = fetch_nasdaq_institutional_holders(symbol)
+            if institutional_holders is not None and not institutional_holders.empty:
+                provider_issues = [issue for issue in provider_issues if issue != "institutional holders"]
+            if institutional_holders is None or institutional_holders.empty:
                 provider_issues.append("institutional holders")
 
             try:
@@ -344,9 +408,6 @@ class StockAnalyzer:
                     mutualfund_holders = yf.Ticker(symbol).get_mutualfund_holders()
                 except Exception:
                     mutualfund_holders = None
-            if mutualfund_holders is None or mutualfund_holders.empty:
-                provider_issues.append("mutual fund holders")
-
             year_high = _mapping_number(fast_info, "year_high")
             year_low = _mapping_number(fast_info, "year_low")
             if year_high is None:
@@ -796,7 +857,8 @@ def main():
                     ]
                 }
                 st.dataframe(pd.DataFrame(breakdown_data), width="stretch")
-                st.caption("The institution count is the number of named entries in Yahoo Finance's available holder list; it may not include every institution holding shares.")
+                holder_source = institutional_holders.attrs.get("data_source", "Yahoo Finance") if institutional_holders is not None else "Yahoo Finance"
+                st.caption(f"Institution counts and holder rows are from {holder_source}'s available report; report coverage and dates can vary.")
             
             st.markdown("---")
             st.write("### 🏛️ Top Institutional Holders & Reported Changes")
@@ -813,12 +875,13 @@ def main():
                     formatted_inst['pctChange'] = formatted_inst['pctChange'].apply(lambda x: f"{x*100:.2f}%" if pd.notnull(x) else x)
 
                 st.dataframe(reported_holder_changes(institutional_holders), width="stretch")
-                st.caption("Change percentages come from Yahoo Finance's reported holder data. Missing provider values are shown as N/A.")
+                holder_source = institutional_holders.attrs.get("data_source", "Yahoo Finance")
+                st.caption(f"Change percentages come from {holder_source}'s reported holder data. Missing values are shown as N/A.")
                 
-                st.write("📋 **Yahoo Finance Reported Institutional Holder Data:**")
+                st.write(f"📋 **{holder_source} Reported Institutional Holder Data:**")
                 st.dataframe(formatted_inst, width="stretch")
             else:
-                st.warning("Detailed institutional holders data currently unavailable via API for this ticker.")
+                st.info("Institutional holders are temporarily unavailable from Yahoo Finance and Nasdaq for this ticker.")
             
             st.markdown("---")
             st.write("### 📈 Top Mutual Fund Holders")
@@ -833,7 +896,7 @@ def main():
                 
                 st.dataframe(formatted_mf, width="stretch")
             else:
-                st.warning("Mutual fund holders data currently unavailable via API for this ticker.")
+                st.info("Yahoo Finance did not provide a separate mutual fund holder list for this ticker. Institutional holder data is shown above when available.")
         else:
             st.warning("Company information not available")
     
