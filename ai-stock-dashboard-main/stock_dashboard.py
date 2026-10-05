@@ -353,6 +353,13 @@ def get_info(ticker):
 
 
 def get_earnings_date(ticker):
+    """Return the next available earnings date without timezone errors.
+
+    Yahoo Finance can return timezone-aware timestamps while Python's
+    datetime.now() is timezone-naive. Comparing the two raises the exact
+    TypeError that was crashing the deployed app. Normalize everything to
+    timezone-naive datetimes before comparing.
+    """
     dates = []
 
     try:
@@ -361,8 +368,16 @@ def get_earnings_date(ticker):
         if isinstance(frame, pd.DataFrame) and not frame.empty:
             for value in frame.index:
                 parsed = pd.to_datetime(value, errors="coerce")
-                if not pd.isna(parsed):
-                    dates.append(parsed.to_pydatetime())
+
+                if pd.isna(parsed):
+                    continue
+
+                # Strip timezone information so comparisons are always
+                # between compatible datetime objects.
+                if getattr(parsed, "tzinfo", None) is not None:
+                    parsed = parsed.tz_localize(None)
+
+                dates.append(parsed.to_pydatetime())
 
     except Exception:
         pass
