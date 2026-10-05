@@ -93,6 +93,15 @@ def count_reported_institutional_holders(holders):
     return int(names.nunique()) if not names.empty else None
 
 
+def major_holder_value(holders, key):
+    """Read a Yahoo-reported summary holder value when detail tables are absent."""
+    if isinstance(holders, pd.DataFrame) and key in holders.index:
+        return _mapping_number(holders.loc[key], "Value")
+    if isinstance(holders, dict):
+        return _mapping_number(holders, key)
+    return None
+
+
 def reported_holder_changes(holders):
     """Show Yahoo's reported holder change; never infer change from reruns."""
     if holders is None or not isinstance(holders, pd.DataFrame) or holders.empty:
@@ -261,6 +270,11 @@ class StockAnalyzer:
             if data is None or data.empty:
                 raise RuntimeError("Yahoo Finance returned no historical prices")
 
+            try:
+                quote_metadata = stock.history_metadata or {}
+            except Exception:
+                quote_metadata = {}
+
             quote_history = data
 
             # Short selections such as 1d may contain no prior session for the
@@ -276,6 +290,17 @@ class StockAnalyzer:
             except Exception:
                 info = {}
                 provider_issues.append("company fundamentals")
+            if not info:
+                # Retry the optional quote-summary endpoint with a fresh
+                # Ticker scraper; Yahoo intermittently returns an empty result.
+                try:
+                    info = yf.Ticker(symbol).get_info() or {}
+                except Exception:
+                    info = {}
+                if info:
+                    provider_issues = [issue for issue in provider_issues if issue != "company fundamentals"]
+                if not info and "company fundamentals" not in provider_issues:
+                    provider_issues.append("company fundamentals")
 
             fast_info = {}
             try:
@@ -302,12 +327,24 @@ class StockAnalyzer:
                 institutional_holders = stock.institutional_holders
             except Exception:
                 institutional_holders = None
+            if institutional_holders is None or institutional_holders.empty:
+                try:
+                    institutional_holders = yf.Ticker(symbol).get_institutional_holders()
+                except Exception:
+                    institutional_holders = None
+            if institutional_holders is None or institutional_holders.empty:
                 provider_issues.append("institutional holders")
 
             try:
                 mutualfund_holders = stock.mutualfund_holders
             except Exception:
                 mutualfund_holders = None
+            if mutualfund_holders is None or mutualfund_holders.empty:
+                try:
+                    mutualfund_holders = yf.Ticker(symbol).get_mutualfund_holders()
+                except Exception:
+                    mutualfund_holders = None
+            if mutualfund_holders is None or mutualfund_holders.empty:
                 provider_issues.append("mutual fund holders")
 
             year_high = _mapping_number(fast_info, "year_high")
@@ -724,7 +761,7 @@ def main():
                 formatted_emp = f"{emp_count:,}" if emp_count and isinstance(emp_count, (int, float)) else 'N/A'
                 
                 company_info = {
-                    "Company Name": info.get('longName', 'N/A'),
+                    "Company Name": info.get('longName') or info.get('shortName') or quote_metadata.get('longName') or quote_metadata.get('shortName') or 'N/A',
                     "Sector": info.get('sector', 'N/A'),
                     "Industry": info.get('industry', 'N/A'),
                     "Country": info.get('country', 'N/A'),
@@ -738,7 +775,13 @@ def main():
                 st.write("### 🏛️ Major Holders Breakdown")
                 insider_pct = _mapping_number(info, 'heldPercentInsiders')
                 inst_pct = _mapping_number(info, 'heldPercentInstitutions')
+                if insider_pct is None:
+                    insider_pct = major_holder_value(major_holders, "insidersPercentHeld")
+                if inst_pct is None:
+                    inst_pct = major_holder_value(major_holders, "institutionsPercentHeld")
                 reported_holder_count = count_reported_institutional_holders(institutional_holders)
+                if reported_holder_count is None:
+                    reported_holder_count = major_holder_value(major_holders, "institutionsCount")
                 
                 breakdown_data = {
                     "Value": [
